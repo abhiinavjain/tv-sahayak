@@ -139,8 +139,9 @@ class PlannerTest {
 
     @Test fun volumeRoute() {
         assertEquals(Action.Press(Key.VOLUME_UP, 2), planner.plan(Command.Volume(VolumeDir.UP, 2), Capabilities()).first())
-        assertEquals(Action.TvKey("KEY_VOLUP", 2),
-            planner.plan(Command.Volume(VolumeDir.UP, 2), Capabilities(samsung = true, volumeViaTv = true)).first())
+        assertEquals(Action.TvVolume(VolumeDir.UP, 2),
+            planner.plan(Command.Volume(VolumeDir.UP, 2), Capabilities(tv = true, volumeViaTv = true)).first())
+        assertEquals(Action.TvOff, planner.plan(Command.PowerTv(false), Capabilities(tv = true)).first())
     }
 }
 

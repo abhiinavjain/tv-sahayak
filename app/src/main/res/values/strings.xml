@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TV Sahayak</string>
+    <string name="shortcut_speak">बोलिए</string>
+    <string name="shortcut_speak_long">बोलकर टीवी चलाइए</string>
+</resources>

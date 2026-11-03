@@ -11,7 +11,7 @@ object SafeShell {
 
     private val safeArg = Regex("^[A-Za-z0-9_./:=?&%,+@#~\\-]*$")
     private val blockedWords = listOf("settings", "factory", "master_clear", "reset", "wipe", "reboot", "recovery",
-        "bootloader", "uninstall", "disable", "install", "clear", "setprop", "su", "rm", "mount", "chmod", "format")
+        "bootloader", "uninstall", "disable", "install", "clear", "setprop", "su", "rm", "mount", "chmod", "format", "master")
     private val amFlags = setOf("-a", "-d", "-n", "-c", "-f", "-t", "--es", "--ez", "--ei", "-W", "-e")
     private val dumpTargets = setOf(listOf("window", "windows"), listOf("window"), listOf("activity", "activities"),
         listOf("media_session"))
@@ -54,7 +54,7 @@ object SafeShell {
             val takes = when (flag) { "-W" -> 0; "--es", "--ez", "--ei", "-e" -> 2; else -> 1 }
             if (takes > 0 && i + takes >= rest.size) return false
             val values = rest.subList(i + 1, minOf(rest.size, i + 1 + takes))
-            if (values.any { v -> blockedWords.any { v.lowercase().contains(it) && !v.startsWith("http") } }) return false
+            if (values.any { v -> !v.startsWith("http") && v.lowercase().split(Regex("[^a-z]+")).any { it in blockedWords } }) return false
             if (flag == "-a" && !values[0].startsWith("android.intent.action.") ) return false
             if (flag == "-a" && values[0] !in setOf("android.intent.action.VIEW", "android.intent.action.MAIN",
                     "android.intent.action.SEARCH")) return false

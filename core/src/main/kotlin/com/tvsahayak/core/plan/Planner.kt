@@ -11,8 +11,9 @@ import java.net.URLEncoder
 /** One step the phone performs. The app layer decides which transport carries it. */
 sealed interface Action {
     data class Press(val key: Key, val times: Int = 1) : Action
-    /** Samsung TV key name, e.g. KEY_VOLUP. */
-    data class TvKey(val key: String, val times: Int = 1) : Action
+    /** Sent to the LG TV itself (webOS API), not to the box. */
+    data class TvVolume(val dir: VolumeDir, val steps: Int = 1) : Action
+    data object TvOff : Action
     data object TvWake : Action
     data class LaunchApp(val app: App) : Action
     data class LaunchLink(val uri: String, val app: App) : Action
@@ -25,8 +26,9 @@ sealed interface Action {
 
 data class Capabilities(
     val adb: Boolean = false,
-    val samsung: Boolean = false,
-    /** Send volume to the Samsung TV instead of the box (when the box's HDMI-CEC volume doesn't work). */
+    /** The LG TV is paired (webOS API). */
+    val tv: Boolean = false,
+    /** Send volume to the LG TV instead of the box (when the box's HDMI-CEC / SimpLink volume doesn't work). */
     val volumeViaTv: Boolean = false,
 )
 
@@ -36,8 +38,8 @@ class Planner(private val catalog: List<CatalogEntry>) {
         is Command.Press -> listOf(Action.Press(cmd.key, cmd.times), Action.Say(sayKey(cmd.key), cmd.key.name.lowercase()))
         is Command.Volume -> volume(cmd, caps)
         is Command.PowerTv -> when {
-            cmd.on && caps.samsung -> listOf(Action.TvWake, Action.Say("टीवी चालू कर रहे हैं", "Turning TV on"))
-            !cmd.on && caps.samsung -> listOf(Action.TvKey("KEY_POWER"), Action.Say("टीवी बंद कर रहे हैं", "Turning TV off"))
+            cmd.on && caps.tv -> listOf(Action.TvWake, Action.Say("टीवी चालू कर रहे हैं", "Turning TV on"))
+            !cmd.on && caps.tv -> listOf(Action.TvKey("KEY_POWER"), Action.Say("टीवी बंद कर रहे हैं", "Turning TV off"))
             else -> listOf(Action.Press(Key.POWER), Action.Say("पावर बटन दबाया", "Pressed power"))
         }
         is Command.OpenApp -> listOf(Action.LaunchApp(cmd.app), Action.Say("${cmd.app.hindiName} खोल रहे हैं", "Opening ${cmd.app.displayName}"))
@@ -47,13 +49,13 @@ class Planner(private val catalog: List<CatalogEntry>) {
     }
 
     private fun volume(cmd: Command.Volume, caps: Capabilities): List<Action> {
-        val tv = caps.samsung && caps.volumeViaTv
-        val (key, tvKey, say) = when (cmd.dir) {
-            VolumeDir.UP -> Triple(Key.VOLUME_UP, "KEY_VOLUP", "आवाज़ बढ़ा दी")
-            VolumeDir.DOWN -> Triple(Key.VOLUME_DOWN, "KEY_VOLDOWN", "आवाज़ कम कर दी")
-            VolumeDir.MUTE -> Triple(Key.MUTE, "KEY_MUTE", "आवाज़ बंद/चालू की")
+        val (key, say) = when (cmd.dir) {
+            VolumeDir.UP -> Key.VOLUME_UP to "आवाज़ बढ़ा दी"
+            VolumeDir.DOWN -> Key.VOLUME_DOWN to "आवाज़ कम कर दी"
+            VolumeDir.MUTE -> Key.MUTE to "आवाज़ बंद/चालू की"
         }
-        return listOf(if (tv) Action.TvKey(tvKey, cmd.steps) else Action.Press(key, cmd.steps), Action.Say(say, "Volume ${cmd.dir.name.lowercase()}"))
+        val step = if (caps.tv && caps.volumeViaTv) Action.TvVolume(cmd.dir, cmd.steps) else Action.Press(key, cmd.steps)
+        return listOf(step, Action.Say(say, "Volume ${cmd.dir.name.lowercase()}"))
     }
 
     private fun search(query: String, app: App, caps: Capabilities): List<Action> {

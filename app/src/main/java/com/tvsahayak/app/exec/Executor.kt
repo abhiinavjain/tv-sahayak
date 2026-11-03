@@ -1,0 +1,117 @@
+package com.tvsahayak.app.exec
+
+import android.util.Log
+import com.tvsahayak.app.Settings
+import com.tvsahayak.app.control.AtvRemote
+import com.tvsahayak.app.control.BoxAdb
+import com.tvsahayak.app.control.LgTv
+import com.tvsahayak.core.VolumeDir
+import com.tvsahayak.core.plan.Action
+import com.tvsahayak.core.plan.Capabilities
+import com.tvsahayak.core.plan.UiDump
+import kotlinx.coroutines.delay
+
+/** Runs a plan from the core [com.tvsahayak.core.plan.Planner] over whichever connections are set up. */
+class Executor(
+    private val settings: Settings,
+    private val remote: AtvRemote,
+    private val adb: BoxAdb,
+    private val tv: LgTv,
+) {
+    data class Outcome(val say: String?, val error: String?, val log: List<String>)
+
+    @Volatile var adbReady = false
+
+    fun capabilities() = Capabilities(
+        adb = settings.adbEnabled && adbReady,
+        tv = settings.tvHost.isNotBlank() && settings.tvClientKey.isNotBlank(),
+        volumeViaTv = settings.volumeViaTv,
+    )
+
+    suspend fun ensureConnections() {
+        if (settings.boxHost.isNotBlank()) remote.connect(settings.boxHost)
+        if (settings.adbEnabled && !adbReady && settings.boxHost.isNotBlank()) {
+            adbReady = adb.connect(settings.boxHost, settings.adbPort).isSuccess
+        }
+    }
+
+    suspend fun run(actions: List<Action>): Outcome {
+        val log = mutableListOf<String>()
+        var say: String? = null
+        if (settings.dryRun) {
+            actions.forEach { log += "(dry run) $it"; if (it is Action.Say) say = it.hindi }
+            return Outcome(say, null, log)
+        }
+        ensureConnections()
+        for (a in actions) {
+            log += a.toString()
+            try {
+                when (a) {
+                    is Action.Say -> say = a.hindi
+                    is Action.Wait -> delay(a.ms)
+                    is Action.Press -> repeat(a.times) { press(a.key.code); delay(150) }
+                    is Action.TvVolume -> {
+                        val ok = when (a.dir) {
+                            VolumeDir.MUTE -> tv.toggleMute(settings.tvHost, settings.tvClientKey)
+                            else -> tv.volume(settings.tvHost, settings.tvClientKey, a.dir == VolumeDir.UP, a.steps)
+                        }
+                        if (!ok) return Outcome(null, "टीवी से जुड़ नहीं पाए", log)
+                    }
+                    Action.TvOff -> if (!tv.turnOff(settings.tvHost, settings.tvClientKey)) return Outcome(null, "टीवी से जुड़ नहीं पाए", log)
+                    Action.TvWake -> {
+                        if (settings.tvMac.isBlank()) return Outcome(null, "टीवी का MAC पता सेटअप में डालिए", log)
+                        tv.wake(settings.tvMac)
+                    }
+                    is Action.LaunchApp -> {
+                        val pkg = settings.packageFor(a.app)
+                        if (adbReady) adb.launch(pkg) else boxRemote { remote.openLink(pkg) }
+                    }
+                    is Action.LaunchLink -> {
+                        if (adbReady) adb.view(a.uri, settings.packageFor(a.app)) else boxRemote { remote.openLink(a.uri) }
+                    }
+                    is Action.Type -> if (adbReady) adb.type(a.text) else boxRemote { remote.type(a.text) }
+                    is Action.Select -> {
+                        if (!adbReady) continue
+                        val node = selectWithRetry(a.labels)
+                        if (node == null) {
+                            log += "  not found on screen"
+                            if (!a.optional) return Outcome(null, "स्क्रीन पर नहीं मिला, रिमोट से चुन लीजिए", log)
+                        } else {
+                            log += "  tap '${node.label}' at ${node.cx},${node.cy}"
+                            adb.tap(node.cx, node.cy)
+                        }
+                    }
+                }
+            } catch (e: BoxUnavailable) {
+                return Outcome(null, "बॉक्स से जुड़ नहीं पाए। बॉक्स चालू है? वाई-फ़ाई एक ही है?", log)
+            } catch (e: Exception) {
+                Log.w(TAG, "action $a failed", e)
+                return Outcome(null, "कुछ गड़बड़ हो गई: ${e.message ?: e.javaClass.simpleName}", log)
+            }
+        }
+        return Outcome(say, null, log)
+    }
+
+    private suspend fun selectWithRetry(labels: List<String>): UiDump.Node? {
+        repeat(3) { attempt ->
+            UiDump.find(UiDump.parse(adb.uiDump()), labels)?.let { return it }
+            delay(1500L * (attempt + 1))
+        }
+        return null
+    }
+
+    private suspend fun press(code: Int) {
+        if (remote.isConnected || (settings.boxHost.isNotBlank() && remote.awaitConnected(3000))) remote.key(code)
+        else if (adbReady) adb.keys(code)
+        else throw BoxUnavailable()
+    }
+
+    private suspend fun boxRemote(block: suspend () -> Unit) {
+        if (!remote.isConnected && !remote.awaitConnected()) throw BoxUnavailable()
+        block()
+    }
+
+    private class BoxUnavailable : Exception()
+
+    companion object { private const val TAG = "Executor" }
+}
