@@ -34,6 +34,7 @@ class Settings(context: Context) {
     var claudeDailyLimit by int("claude_daily_limit", 30)
     var dryRun by bool("dry_run", false)
     var liveTvKey by bool("live_tv_key", true)
+    var wallpaper by str("wallpaper", "ROYAL")
     /** Channel numbers on the Airtel box, by channel name (e.g. "Zee TV" -> 109). */
     var channelNumbers: Map<String, Int>
         get() = runCatching {

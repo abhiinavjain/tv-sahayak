@@ -1,6 +1,15 @@
 package com.tvsahayak.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -70,11 +79,26 @@ fun SetupScreen(vm: MainViewModel, onClose: () -> Unit) {
     val channelList = remember { vm.channels() }
     var channelNumbers by remember { mutableStateOf(channelList.associate { it.name to (it.number?.toString() ?: "") }) }
 
-    Column(Modifier.fillMaxSize().background(Palette.background).verticalScroll(rememberScrollState()).padding(16.dp),
+    Column(Modifier.fillMaxSize().background(Palette.background).statusBarsPadding().navigationBarsPadding()
+        .verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Setup", fontSize = 26.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             Button(onClick = onClose) { Text("Done") }
+        }
+
+        Section("Wallpaper")
+        val current by vm.wallpaper.collectAsState()
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Wallpaper.entries.forEach { w ->
+                Box(Modifier.weight(1f).height(90.dp).clip(RoundedCornerShape(18.dp))
+                    .border(if (w == current) 3.dp else 1.dp, if (w == current) w.gold else Color.White.copy(alpha = 0.2f), RoundedCornerShape(18.dp))
+                    .clickable { vm.setWallpaper(w) }) {
+                    WallpaperBackground(w)
+                    Text(w.hindi + if (w == current) " ✓" else "", color = w.gold, fontWeight = FontWeight.Bold, fontSize = 18.sp,
+                        modifier = Modifier.align(Alignment.Center))
+                }
+            }
         }
 
         Section("1. Find devices on Wi-Fi")

@@ -12,8 +12,8 @@ android {
         applicationId = "com.tvsahayak.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "2.0"
+        versionCode = 7
+        versionName = "2.1"
     }
 
     buildTypes {
@@ -28,6 +28,7 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
+    testOptions { unitTests.isIncludeAndroidResources = true }
     packaging {
         resources.excludes += setOf("META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/DEPENDENCIES",
             "META-INF/LICENSE*", "META-INF/NOTICE*", "META-INF/*.kotlin_module")
@@ -52,4 +53,11 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // Claude fallback for commands the offline rules don't understand
     implementation("com.anthropic:anthropic-java:2.34.0")
+
+    // Renders screens to PNG on the laptop (no phone needed) to check the design.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("androidx.test:core:1.6.1")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

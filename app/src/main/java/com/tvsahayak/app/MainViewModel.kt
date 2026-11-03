@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tvsahayak.app.control.AtvRemote
 import com.tvsahayak.app.control.Discovery
+import com.tvsahayak.app.ui.Wallpaper
 import com.tvsahayak.app.voice.VoiceInput
 import com.tvsahayak.core.App
 import com.tvsahayak.core.Command
@@ -51,6 +52,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Show link shared into the app, waiting to be saved as a favourite on the Setup screen. */
     val sharedLink = MutableStateFlow<String?>(null)
+    val wallpaper = MutableStateFlow(Wallpaper.from(settings.wallpaper))
+    fun setWallpaper(w: Wallpaper) { wallpaper.value = w; settings.wallpaper = w.name }
     val showSetup = MutableStateFlow(false)
 
     fun receiveShared(text: String) {
@@ -87,16 +90,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             log("rules: ${best.second.command} (${"%.2f".format(best.second.confidence)} ${best.second.note})")
 
             var cmd = best.second.command
+            var understood = best.second.confidence >= 0.4 && cmd != Command.Unknown
             if (best.second.confidence < 0.6 && app.claude.available()) {
                 _ui.update { it.copy(reply = "सोच रहे हैं…") }
                 val llm = app.claude.understand(alternatives)
                 log("claude: $llm")
                 if (llm != null && llm != Command.Unknown) {
                     cmd = llm
+                    understood = true
                     if (llm is Command.Play || llm is Command.Search || llm is Command.OpenApp) {
                         settings.learned = settings.learned + (parser.key(best.first) to llm)
                     }
                 }
+            }
+            // Last resort: search YouTube for exactly what was said (YouTube understands Hindi in any script).
+            if (!understood && alternatives.first().isNotBlank()) {
+                log("not understood → YouTube search")
+                cmd = Command.Search(alternatives.first().trim(), App.YOUTUBE)
             }
             run(cmd)
         }
