@@ -100,8 +100,9 @@ class Executor(
         listOf(app.webLink) + (listOf(settings.packageFor(app)) + app.packages).distinct().map { "market://launch?id=$it" }
 
     /**
-     * Sends links one by one until the box reports the wanted app in front. If the box never reports the
-     * front app we can't tell, so every link is tried (opening the same app twice is harmless).
+     * Sends links one by one, moving to the next only when the box reports that a different app came to the front.
+     * If the box doesn't report the front app, the first link is assumed to have worked: sending a second one
+     * could replace the show page that just opened with the app's home screen.
      */
     private suspend fun openVerified(app: App, links: List<String>, log: MutableList<String>): Boolean {
         val wanted = (app.packages + settings.packageFor(app)).toSet()
@@ -109,15 +110,15 @@ class Executor(
             val before = remote.currentApp
             boxRemote { remote.openLink(link) }
             log += "  sent $link"
-            if (before in wanted) return true
+            if (before in wanted) return true // the app is already in front and handles the link itself
             val front = withTimeoutOrNull(4000) {
                 while (remote.currentApp == before || remote.currentApp == null) delay(200)
                 remote.currentApp
             }
             log += "  app in front: ${front ?: "not reported"}"
-            if (front in wanted) return true
+            if (front == null || front in wanted) return true
         }
-        return remote.currentApp == null
+        return false
     }
 
     private suspend fun selectWithRetry(labels: List<String>): UiDump.Node? {

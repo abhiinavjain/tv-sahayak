@@ -35,7 +35,27 @@ enum class App(
     SONYLIV("SonyLIV", "सोनी लिव", listOf("com.sonyliv"),
         listOf("sonyliv", "sony liv", "sony live", "sony", "सोनी लिव", "सोनी लाइव", "सोनी"), "https://www.sonyliv.com"),
     AIRTEL_XSTREAM("Airtel Xstream Play", "एयरटेल एक्सस्ट्रीम", listOf("tv.accedo.airtel.wynk", "com.airtel.xstream", "tv.airtel.xstream"),
-        listOf("airtel xstream", "xstream", "airtel", "stream play", "एयरटेल", "एक्सस्ट्रीम", "एयरटेल एक्सस्ट्रीम"), "https://www.airtelxstream.in"),
+        listOf("airtel xstream", "xstream", "airtel", "stream play", "एयरटेल", "एक्सस्ट्रीम", "एयरटेल एक्सस्ट्रीम"), "https://www.airtelxstream.in");
+
+    companion object {
+        private val hosts = mapOf("hotstar.com" to JIOHOTSTAR, "jiocinema.com" to JIOHOTSTAR, "netflix.com" to NETFLIX,
+            "primevideo.com" to PRIME_VIDEO, "amazon." to PRIME_VIDEO, "zee5.com" to ZEE5, "sonyliv.com" to SONYLIV,
+            "youtube.com" to YOUTUBE, "youtu.be" to YOUTUBE, "airtelxstream.in" to AIRTEL_XSTREAM)
+
+        /** Which app a shared show link belongs to, e.g. a hotstar.com link -> JioHotstar. */
+        fun fromLink(url: String): App? {
+            val host = Regex("^https?://([^/?#]+)").find(url.trim())?.groupValues?.get(1)?.lowercase() ?: return null
+            return hosts.entries.firstOrNull { host.contains(it.key) }?.value
+        }
+
+        /** Pulls the first link out of shared text ("Watch Anupamaa on JioHotstar https://...") without tracking parameters. */
+        fun linkIn(text: String): String? = Regex("https?://\\S+").find(text)?.value?.substringBefore('?')?.trimEnd('.', ',', ')')
+
+        /** A readable show name from a link's path, e.g. .../shows/anupamaa/1260022017 -> "Anupamaa". */
+        fun titleFromLink(url: String): String =
+            url.substringBefore('?').trimEnd('/').split('/').lastOrNull { it.any(Char::isLetter) && it != "shows" && it != "title" }
+                ?.replace(Regex("-\\d+$"), "")?.split('-')?.joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }.orEmpty()
+    }
 }
 
 sealed interface Command {

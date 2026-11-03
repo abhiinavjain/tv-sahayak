@@ -103,7 +103,7 @@ class Planner(private val catalog: List<CatalogEntry>) {
             steps += Action.Select(PLAY_LABELS, optional = true)
             steps += Action.Say("${entry?.title ?: cmd.title} चला रहे हैं", "Playing ${entry?.title ?: cmd.title}")
         } else {
-            steps += Action.Say("${entry?.title ?: cmd.title} खोल दिया। रिमोट से OK दबाइए।", "Opened ${entry?.title ?: cmd.title}. Press OK to play.")
+            steps += Action.Say("$name खोल दिया। चलाने के लिए OK दबाइए।", "Opened $name. Press OK to play.")
         }
         return steps
     }
@@ -134,6 +134,7 @@ class Planner(private val catalog: List<CatalogEntry>) {
         /** Search deep links known to work on Android TV. Others fall back to the app's search screen. */
         fun searchLink(app: App, q: String): String? = when (app) {
             App.YOUTUBE -> "https://www.youtube.com/results?search_query=${enc(q)}"
+            App.JIOHOTSTAR -> "https://www.hotstar.com/in/explore?search_query=${enc(q)}"
             else -> null
         }
     }

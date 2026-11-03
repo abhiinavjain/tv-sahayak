@@ -47,7 +47,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init { app.remote.onLog = { log(it) } }
 
-    private fun catalog(): List<CatalogEntry> = DefaultCatalog.entries + settings.extraCatalog
+    /** Show link shared into the app, waiting to be saved as a favourite on the Setup screen. */
+    val sharedLink = MutableStateFlow<String?>(null)
+    val showSetup = MutableStateFlow(false)
+
+    fun receiveShared(text: String) {
+        val link = App.linkIn(text) ?: return
+        sharedLink.value = link
+        showSetup.value = true
+    }
+
+    // Family favourites first, so a favourite with its own link wins over the built-in entry of the same name.
+    private fun catalog(): List<CatalogEntry> = settings.extraCatalog + DefaultCatalog.entries
     private fun log(line: String) = _log.update { (it + line).takeLast(200) }
 
     // ---------------- Voice flow ----------------

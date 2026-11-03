@@ -8,10 +8,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import com.tvsahayak.app.ui.FamilyScreen
 import com.tvsahayak.app.ui.SetupScreen
@@ -27,17 +25,23 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             SahayakTheme {
-                var setup by remember { mutableStateOf(false) }
-                if (setup) SetupScreen(vm, onClose = { setup = false })
-                else FamilyScreen(vm, onMic = ::listen, onSetup = { setup = true })
+                val setup by vm.showSetup.collectAsState()
+                if (setup) SetupScreen(vm, onClose = { vm.showSetup.value = false })
+                else FamilyScreen(vm, onMic = ::listen, onSetup = { vm.showSetup.value = true })
             }
         }
-        if (intent?.action == ACTION_LISTEN) listen()
+        handle(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.action == ACTION_LISTEN) listen()
+        handle(intent)
+    }
+
+    private fun handle(intent: Intent?) = when (intent?.action) {
+        ACTION_LISTEN -> listen()
+        Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)?.let(vm::receiveShared) ?: Unit
+        else -> Unit
     }
 
     private fun listen() {

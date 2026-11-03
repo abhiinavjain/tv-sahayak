@@ -19,14 +19,21 @@ data class CatalogEntry(
 
 object DefaultCatalog {
     val entries: List<CatalogEntry> = listOf(
-        CatalogEntry("Anupamaa", App.JIOHOTSTAR, listOf("anupama", "anupamaa", "अनुपमा", "अनुपमाँ"), episodic = true),
-        CatalogEntry("Bigg Boss", App.JIOHOTSTAR, listOf("bigg boss", "big boss", "बिग बॉस", "बिग बोस"), episodic = true),
+        // Show-page links were checked on hotstar.com / sonyliv.com (Nov 2026). Opening one lands on the show,
+        // where the TV app focuses "Watch"/"Resume" for the latest episode.
+        CatalogEntry("Anupamaa", App.JIOHOTSTAR, listOf("anupama", "anupamaa", "अनुपमा", "अनुपमाँ"), episodic = true,
+            deepLink = "https://www.hotstar.com/in/shows/anupamaa/1260022017"),
+        CatalogEntry("Bigg Boss", App.JIOHOTSTAR, listOf("bigg boss", "big boss", "बिग बॉस", "बिग बोस"), episodic = true,
+            deepLink = "https://www.hotstar.com/in/shows/bigg-boss/1271682428"),
         CatalogEntry("Yeh Rishta Kya Kehlata Hai", App.JIOHOTSTAR,
-            listOf("yeh rishta kya kehlata hai", "yeh rishta", "ये रिश्ता क्या कहलाता है", "ये रिश्ता"), episodic = true),
+            listOf("yeh rishta kya kehlata hai", "yeh rishta", "ये रिश्ता क्या कहलाता है", "ये रिश्ता"), episodic = true,
+            deepLink = "https://www.hotstar.com/in/shows/yeh-rishta/586"),
         CatalogEntry("Ghum Hai Kisikey Pyaar Meiin", App.JIOHOTSTAR,
-            listOf("ghum hai kisikey pyaar meiin", "ghum hai kisi ke pyar mein", "गुम है किसी के प्यार में"), episodic = true),
+            listOf("ghum hai kisikey pyaar meiin", "ghum hai kisi ke pyar mein", "गुम है किसी के प्यार में"), episodic = true,
+            deepLink = "https://www.hotstar.com/in/shows/ghum-hai-kisikey/1260043179"),
         CatalogEntry("Taarak Mehta Ka Ooltah Chashmah", App.SONYLIV,
-            listOf("taarak mehta ka ooltah chashmah", "tarak mehta", "taarak mehta", "तारक मेहता", "तारक मेहता का उल्टा चश्मा"), episodic = true),
+            listOf("taarak mehta ka ooltah chashmah", "tarak mehta", "taarak mehta", "तारक मेहता", "तारक मेहता का उल्टा चश्मा"), episodic = true,
+            deepLink = "https://www.sonyliv.com/shows/taarak-mehta-ka-ooltah-chashmah-1700000084"),
         CatalogEntry("Kaun Banega Crorepati", App.SONYLIV, listOf("kaun banega crorepati", "kbc", "कौन बनेगा करोड़पति", "केबीसी"), episodic = true),
         CatalogEntry("CID", App.SONYLIV, listOf("cid", "सीआईडी", "सी आई डी"), episodic = true),
         CatalogEntry("Indian Idol", App.SONYLIV, listOf("indian idol", "इंडियन आइडल"), episodic = true),

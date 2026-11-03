@@ -118,17 +118,28 @@ class PlannerTest {
     }
 
     @Test fun latestEpisodeWithAdbSelectsEpisodeThenPlay() {
-        val p = planner.plan(Command.Play("Anupamaa", App.JIOHOTSTAR, EpisodeSelector.LATEST), Capabilities(adb = true))
-        assertEquals(Action.LaunchApp(App.JIOHOTSTAR), p.first())
-        assertTrue(p.contains(Action.Type("Anupamaa")))
+        val p = planner.plan(Command.Play("Kumkum Bhagya", App.ZEE5, EpisodeSelector.LATEST), Capabilities(adb = true))
+        assertEquals(Action.LaunchApp(App.ZEE5), p.first())
+        assertTrue(p.contains(Action.Type("Kumkum Bhagya")))
         val selects = p.filterIsInstance<Action.Select>()
         assertEquals(4, selects.size) // search box, show, episode, Play
         assertEquals(Planner.PLAY_LABELS, selects.last().labels)
     }
 
-    @Test fun withoutAdbOpensAppAndAsksToChoose() {
+    @Test fun knownShowOpensItsPageDirectly() {
         val p = planner.plan(Command.Play("Anupamaa", App.JIOHOTSTAR, EpisodeSelector.LATEST), Capabilities())
-        assertEquals(Action.LaunchApp(App.JIOHOTSTAR), p.first())
+        assertEquals(Action.LaunchLink("https://www.hotstar.com/in/shows/anupamaa/1260022017", App.JIOHOTSTAR), p.first())
+        assertTrue((p.last() as Action.Say).hindi.contains("OK"))
+    }
+
+    @Test fun unknownHotstarShowUsesSearchLink() {
+        val p = planner.plan(Command.Play("Jhanak", App.JIOHOTSTAR), Capabilities())
+        assertEquals(Action.LaunchLink("https://www.hotstar.com/in/explore?search_query=Jhanak", App.JIOHOTSTAR), p.first())
+    }
+
+    @Test fun withoutAdbOpensAppAndAsksToChoose() {
+        val p = planner.plan(Command.Play("Kumkum Bhagya", App.ZEE5, EpisodeSelector.LATEST), Capabilities())
+        assertEquals(Action.LaunchApp(App.ZEE5), p.first())
         // The Search key opens Google Assistant on Android TV, so it must not be pressed or typed into.
         assertTrue(p.none { it is Action.Select || it is Action.Type || it == Action.Press(Key.SEARCH) })
         assertTrue((p.last() as Action.Say).hindi.contains("OK"))
@@ -168,6 +179,20 @@ class UiDumpTest {
 
     @Test fun findsTodayEpisode() {
         assertTrue(UiDump.find(UiDump.parse(xml), listOf("Today"))!!.label.contains("Today"))
+    }
+}
+
+class SharedLinkTest {
+    @Test fun recognisesSharedShowLinks() {
+        val text = "Watch Anupama on JioHotstar https://www.hotstar.com/in/shows/anupamaa/1260022017?utm_source=share"
+        val link = App.linkIn(text)!!
+        assertEquals("https://www.hotstar.com/in/shows/anupamaa/1260022017", link)
+        assertEquals(App.JIOHOTSTAR, App.fromLink(link))
+        assertEquals("Anupamaa", App.titleFromLink(link))
+        assertEquals("Taarak Mehta Ka Ooltah Chashmah",
+            App.titleFromLink("https://www.sonyliv.com/shows/taarak-mehta-ka-ooltah-chashmah-1700000084"))
+        assertEquals(App.SONYLIV, App.fromLink("https://www.sonyliv.com/shows/x-1"))
+        assertNull(App.fromLink("https://example.com/x"))
     }
 }
 

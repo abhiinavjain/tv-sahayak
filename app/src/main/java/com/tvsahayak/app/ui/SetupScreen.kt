@@ -20,6 +20,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -136,7 +137,11 @@ fun SetupScreen(vm: MainViewModel, onClose: () -> Unit) {
         }
 
         Section("6. Family favourites")
-        FavouriteEditor(favourites) { favourites = it }
+        Text("Easiest: in the JioHotstar / SonyLIV / ZEE5 app on this phone, open the show → Share → TV Sahayak. " +
+            "Or open the show on the website and copy its link here. Saying the show's name then opens that page on the TV.",
+            color = Palette.muted)
+        val shared by vm.sharedLink.collectAsState()
+        FavouriteEditor(favourites, shared, onShareUsed = { vm.sharedLink.value = null }) { favourites = it; s.extraCatalog = it }
 
         Section("7. Test without speaking")
         Field("Type a command, e.g. Anupama ka latest episode chalao", test) { test = it }
@@ -179,19 +184,30 @@ fun SetupScreen(vm: MainViewModel, onClose: () -> Unit) {
 }
 
 @Composable
-private fun FavouriteEditor(list: List<CatalogEntry>, onChange: (List<CatalogEntry>) -> Unit) {
+private fun FavouriteEditor(list: List<CatalogEntry>, shared: String?, onShareUsed: () -> Unit, onChange: (List<CatalogEntry>) -> Unit) {
     var title by remember { mutableStateOf("") }
     var aliases by remember { mutableStateOf("") }
+    var link by remember { mutableStateOf("") }
     var app by remember { mutableStateOf(App.JIOHOTSTAR) }
     var episodic by remember { mutableStateOf(true) }
+    LaunchedEffect(shared) {
+        if (shared != null) {
+            link = shared; title = App.titleFromLink(shared); App.fromLink(shared)?.let { app = it }
+            onShareUsed()
+        }
+    }
     list.forEach { e ->
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("${e.title} → ${e.app.displayName}${if (e.episodic) " (serial)" else ""}", Modifier.weight(1f))
+            Text("${e.title} → ${e.app.displayName}${if (e.episodic) " (serial)" else ""}${if (e.deepLink != null) " 🔗" else ""}", Modifier.weight(1f))
             TextButton(onClick = { onChange(list - e) }) { Text("Remove") }
         }
     }
     Field("Show name", title) { title = it }
     Field("Other ways people say it, comma separated (Hindi too)", aliases) { aliases = it }
+    Field("Show link (optional, opens the show directly)", link, KeyboardType.Uri) { v ->
+        link = v.trim(); App.fromLink(link)?.let { app = it }
+        if (title.isBlank()) title = App.titleFromLink(link)
+    }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         App.entries.forEach { a ->
             TextButton(onClick = { app = a }) { Text(a.displayName.split(' ').first(), fontWeight = if (a == app) FontWeight.Bold else FontWeight.Normal, fontSize = 12.sp) }
@@ -200,8 +216,10 @@ private fun FavouriteEditor(list: List<CatalogEntry>, onChange: (List<CatalogEnt
     Row(verticalAlignment = Alignment.CenterVertically) {
         Checkbox(episodic, { episodic = it }); Text("Daily serial / has episodes")
         OutlinedButton(onClick = {
-            onChange(list + CatalogEntry(title.trim(), app, aliases.split(',').map { it.trim() }.filter { it.isNotEmpty() }, episodic))
-            title = ""; aliases = ""
+            val aliasList = aliases.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+            onChange(list.filterNot { it.title.equals(title.trim(), ignoreCase = true) } +
+                CatalogEntry(title.trim(), app, aliasList, episodic, deepLink = link.takeIf { it.startsWith("http") }))
+            title = ""; aliases = ""; link = ""
         }, enabled = title.isNotBlank(), modifier = Modifier.padding(start = 12.dp)) { Text("Add") }
     }
 }
