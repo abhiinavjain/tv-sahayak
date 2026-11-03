@@ -74,8 +74,9 @@ class BoxAdb(context: Context) {
         val installed = shell(listOf("pm", "list", "packages")).lines().map { it.removePrefix("package:").trim() }.toSet()
         val result = mutableMapOf<App, String>()
         for (app in App.entries) {
-            app.packages.firstOrNull { it in installed }?.let { result[app] = it; continue }
-            if (app == App.AIRTEL_XSTREAM) installed.firstOrNull { "xstream" in it || "wynk" in it }?.let { result[app] = it }
+            val pkg = app.packages.firstOrNull { it in installed }
+                ?: if (app == App.AIRTEL_XSTREAM) installed.firstOrNull { "xstream" in it || "wynk" in it } else null
+            if (pkg != null) result[app] = pkg
         }
         return result
     }

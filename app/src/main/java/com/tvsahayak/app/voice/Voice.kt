@@ -64,9 +64,13 @@ class VoiceInput(private val context: Context) {
 /** Speaks replies in Hindi so the family hears what happened without reading the screen. */
 class Speaker(context: Context) {
     private var ready = false
-    private val tts = TextToSpeech(context.applicationContext) { status ->
-        ready = status == TextToSpeech.SUCCESS
-        if (ready) tts.language = Locale("hi", "IN")
+    private lateinit var tts: TextToSpeech
+
+    init {
+        tts = TextToSpeech(context.applicationContext) { status ->
+            ready = status == TextToSpeech.SUCCESS
+            if (ready) tts.language = Locale("hi", "IN")
+        }
     }
     var enabled = true
 
