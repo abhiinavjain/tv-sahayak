@@ -48,6 +48,8 @@ fun SetupScreen(vm: MainViewModel, onClose: () -> Unit) {
     val pairing by vm.pairing.collectAsState()
     val box by vm.boxState.collectAsState()
     val scanning by vm.scanning.collectAsState()
+    val boxMsg by vm.boxMsg.collectAsState()
+    val tvMsg by vm.tvMsg.collectAsState()
 
     var boxHost by remember { mutableStateOf(s.boxHost) }
     var tvHost by remember { mutableStateOf(s.tvHost) }
@@ -88,7 +90,13 @@ fun SetupScreen(vm: MainViewModel, onClose: () -> Unit) {
         Section("2. Airtel box (Android TV Remote) — $box")
         Field("Box IP address", boxHost) { boxHost = it }
         Text("Press Pair: a 6-character code appears on the TV. Type it in.", color = Palette.muted)
-        Button(onClick = { vm.pairBox(boxHost.trim()) }, enabled = boxHost.isNotBlank()) { Text("Pair box") }
+        Text("Find the box's IP on the box: Settings → Network & Internet → your Wi-Fi (or Ethernet). It is different from the TV's IP.",
+            color = Palette.muted)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { vm.checkBox(boxHost.trim()) }, enabled = boxHost.isNotBlank()) { Text("Check") }
+            Button(onClick = { vm.pairBox(boxHost.trim()) }, enabled = boxHost.isNotBlank()) { Text("Pair box") }
+        }
+        if (boxMsg.isNotBlank()) Text(boxMsg, color = Palette.warn)
 
         Section("3. Optional: ADB for auto-play")
         Text("Lets the app press Play on the right episode. Needs Developer options → Network/Wireless debugging on the box. " +
@@ -103,7 +111,11 @@ fun SetupScreen(vm: MainViewModel, onClose: () -> Unit) {
 
         Section("4. LG TV (volume, power)")
         Field("LG TV IP address", tvHost) { tvHost = it }
-        Button(onClick = { vm.pairTv(tvHost.trim()) }, enabled = tvHost.isNotBlank()) { Text("Pair LG TV (press OK on the TV)") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { vm.checkTv(tvHost.trim()) }, enabled = tvHost.isNotBlank()) { Text("Check") }
+            Button(onClick = { vm.pairTv(tvHost.trim()) }, enabled = tvHost.isNotBlank()) { Text("Pair LG TV") }
+        }
+        if (tvMsg.isNotBlank()) Text(tvMsg, color = Palette.warn)
         Field("TV MAC (for switching on; filled after pairing)", tvMac) { tvMac = it }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(volTv, { volTv = it }); Text("  Send volume to the LG TV (if the box volume keys don't change TV volume)")

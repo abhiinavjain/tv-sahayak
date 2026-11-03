@@ -106,14 +106,35 @@ class Discovery(private val context: Context) {
         for (h in hosts) launch(Dispatchers.IO) {
             gate.withPermit {
                 val ip = h.hostAddress ?: return@withPermit
-                if (open(ip, 6466)) found(Device(Kind.BOX, "Android TV", ip, "port 6466"))
-                if (open(ip, 3001) || open(ip, 3000)) found(Device(Kind.LG_TV, "Maybe LG TV", ip, "port 3000/3001"))
+                val lg = open(ip, 3001) || open(ip, 3000)
+                when {
+                    open(ip, 6466) || open(ip, 6467) -> found(Device(Kind.BOX, "Android TV", ip, "port 6466"))
+                    // Android TV boxes with Chromecast built-in answer on 8009 even when the remote service is asleep.
+                    !lg && open(ip, 8009) -> found(Device(Kind.BOX, "Maybe Airtel box (Cast)", ip, "port 8009"))
+                }
+                if (lg) found(Device(Kind.LG_TV, "Maybe LG TV", ip, "port 3000/3001"))
             }
         }
     }
 
+    /** What answers at [host]: used by the Setup screen's Check button. */
+    suspend fun probe(host: String): String = coroutineScope {
+        val ports = linkedMapOf(6466 to "TV Remote control", 6467 to "TV Remote pairing", 5555 to "ADB", 8009 to "Chromecast",
+            3000 to "LG webOS", 3001 to "LG webOS (TLS)")
+        val open = ports.keys.map { p -> p to kotlinx.coroutines.async(Dispatchers.IO) { open(host, p) } }
+            .filter { it.second.await() }.map { it.first }
+        val guess = when {
+            6466 in open || 6467 in open -> "This is an Android TV box ✔ (use it as Box IP)"
+            3000 in open || 3001 in open -> "This looks like the LG TV, not the box (use it as LG TV IP)"
+            8009 in open -> "Cast device, but the TV Remote service isn't answering. Is the box on, not in standby?"
+            open.isEmpty() -> "Nothing answered. Wrong address, device off, or not on this Wi-Fi"
+            else -> "Unknown device"
+        }
+        "$host: " + (if (open.isEmpty()) "no ports open" else open.joinToString { "$it ${ports[it]}" }) + "\n→ $guess"
+    }
+
     private fun open(host: String, port: Int): Boolean = runCatching {
-        Socket().use { it.connect(InetSocketAddress(host, port), 400) }; true
+        Socket().use { it.connect(InetSocketAddress(host, port), 600) }; true
     }.getOrDefault(false)
 
     private fun ssdpLg(): List<Device> {

@@ -135,17 +135,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val pairing = _pairing.asStateFlow()
     fun submitCode(code: String?) { _pairing.value?.complete(code); _pairing.value = null }
 
+    /** Latest result line for the box and TV sections of Setup. */
+    private val _boxMsg = MutableStateFlow("")
+    val boxMsg = _boxMsg.asStateFlow()
+    private val _tvMsg = MutableStateFlow("")
+    val tvMsg = _tvMsg.asStateFlow()
+    private fun boxSays(m: String) { _boxMsg.value = m; log("box: $m") }
+    private fun tvSays(m: String) { _tvMsg.value = m; log("tv: $m") }
+
+    fun checkBox(host: String) = viewModelScope.launch { boxSays("Checking $host …"); boxSays(app.discovery.probe(host)) }
+    fun checkTv(host: String) = viewModelScope.launch { tvSays("Checking $host …"); tvSays(app.discovery.probe(host)) }
+
     fun pairBox(host: String) = viewModelScope.launch {
-        log("pairing with box $host — look at the TV for a code")
+        boxSays("Connecting to $host … a code should appear on the TV")
         app.remote.disconnect()
         val err = app.remote.pair(host) {
+            boxSays("Type the code shown on the TV")
             val d = CompletableDeferred<String?>(); _pairing.value = d; d.await()
         }
         if (err == null) {
             settings.boxHost = host
             app.remote.connect(host)
-            log("box paired ✔")
-        } else log("box pairing: $err")
+            boxSays(if (app.remote.awaitConnected(8000)) "Box paired and connected ✔" else "Paired ✔ but control connection not up yet; retrying in background")
+        } else {
+            boxSays("Pairing failed: $err")
+            boxSays(_boxMsg.value + "\n" + app.discovery.probe(host))
+        }
     }
 
     fun connectAdb() = viewModelScope.launch {
@@ -172,12 +187,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun pairTv(host: String) = viewModelScope.launch {
-        log("LG TV: press OK on the TV prompt…")
+        tvSays("Press OK / Allow on the TV prompt (within 60 s)…")
         settings.tvHost = host
         val err = app.tv.pair(host)
-        if (err != null) { log("LG TV: $err"); return@launch }
-        log("LG TV paired ✔")
-        app.tv.macAddress(host, settings.tvClientKey)?.let { settings.tvMac = it; log("TV MAC $it (for switching on)") }
+        if (err != null) { tvSays("$err\n" + app.discovery.probe(host)); return@launch }
+        val mac = app.tv.macAddress(host, settings.tvClientKey)?.also { settings.tvMac = it }
+        tvSays("LG TV paired ✔" + (mac?.let { " (MAC $it saved for switching on)" } ?: ""))
     }
 
     override fun onCleared() { voice.stop() }
