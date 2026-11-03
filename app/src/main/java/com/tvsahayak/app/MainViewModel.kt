@@ -11,6 +11,8 @@ import com.tvsahayak.core.Command
 import com.tvsahayak.core.Key
 import com.tvsahayak.core.ParseResult
 import com.tvsahayak.core.content.CatalogEntry
+import com.tvsahayak.core.content.Channel
+import com.tvsahayak.core.content.DefaultChannels
 import com.tvsahayak.core.content.DefaultCatalog
 import com.tvsahayak.core.nlu.RuleParser
 import com.tvsahayak.core.plan.Planner
@@ -59,12 +61,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // Family favourites first, so a favourite with its own link wins over the built-in entry of the same name.
     private fun catalog(): List<CatalogEntry> = settings.extraCatalog + DefaultCatalog.entries
+    fun channels(): List<Channel> = settings.channelNumbers.let { n -> DefaultChannels.list.map { it.copy(number = n[it.name] ?: it.number) } }
     private fun log(line: String) = _log.update { (it + line).takeLast(200) }
 
     // ---------------- Voice flow ----------------
 
     fun startListening() {
         if (_ui.value.phase == Phase.LISTENING) { voice.stop(); _ui.update { it.copy(phase = Phase.IDLE) }; return }
+        app.speaker.stop()
         voice.start("hi-IN", object : VoiceInput.Callback {
             override fun onListening() = _ui.update { UiState(phase = Phase.LISTENING, reply = "बोलिए… सुन रहे हैं") }
             override fun onPartial(text: String) = _ui.update { it.copy(heard = text) }
@@ -77,7 +81,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun handle(alternatives: List<String>) {
         viewModelScope.launch {
             _ui.update { it.copy(phase = Phase.WORKING, heard = alternatives.first(), reply = "समझ रहे हैं…") }
-            val parser = RuleParser(catalog(), settings.learned)
+            val parser = RuleParser(catalog(), settings.learned, channels())
             val best: Pair<String, ParseResult> = alternatives.map { it to parser.parse(it) }.maxBy { it.second.confidence }
             log("heard: ${alternatives.joinToString(" | ")}")
             log("rules: ${best.second.command} (${"%.2f".format(best.second.confidence)} ${best.second.note})")
@@ -103,7 +107,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun command(c: Command) = viewModelScope.launch { run(c) }
 
     private suspend fun run(cmd: Command) {
-        val plan = Planner(catalog()).plan(cmd, app.executor.capabilities())
+        val plan = Planner(catalog(), channels()).plan(cmd, app.executor.capabilities())
         val out = app.executor.run(plan)
         out.log.forEach { log("  $it") }
         val reply = out.error ?: out.say ?: "ठीक है"

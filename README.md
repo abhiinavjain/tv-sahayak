@@ -1,5 +1,7 @@
 # TV Sahayak 📺🎙️
 
+Made by Abhinav Jain.
+
 A voice remote for the family. Say "Anupama ka latest episode chalao", "Netflix par Stranger Things chalao" or "Volume badhao" into an Android phone, and the Airtel Xstream box and LG TV do it. Commands can be Hindi, English or Hinglish.
 
 - **Phone only.** There is no server: the phone talks to the box and TV over home Wi-Fi.

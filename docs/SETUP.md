@@ -59,10 +59,15 @@ The app understands Hindi, English and Hinglish commands offline. If it doesn't 
 
 Only the spoken sentence is sent: no contacts, location or other data.
 
-## 6. Favourites
+## 6. TV channels
+Setup → **TV channels**: type each channel's number from the box's Channel Guide (Zee TV HD is 109 on your box). Then saying "Star Plus lagao", or tapping a channel button, tunes the live channel. A channel without a number opens in its app instead (Star Plus and Colors in JioHotstar, Zee in ZEE5, Sony in SonyLIV).
+
+If typing the number brings up a menu instead of changing the channel, turn off **Press Live TV before the number**.
+
+## 7. Favourites
 Add shows the family watches under **Family favourites**: the name, other ways people say it (Hindi spelling too, e.g. `अनुपमा, anupama`) and the app it's on. Mark daily serials so "aaj ka episode" works.
 
-## 7. Check it works
+## 8. Check it works
 Setup → **Test without speaking** → type a command → **Run**. With **Dry run** ticked, it only shows the steps.
 
 | Say | What happens |
@@ -76,6 +81,8 @@ Setup → **Test without speaking** → type a command → **Run**. With **Dry r
 | Cricket highlights search karo | YouTube search |
 | Ruko / Chalao / Wapas jao / Aage karo | Pause / play / back / fast-forward |
 | TV band karo / TV chalu karo | LG TV off / on |
+| Star Plus lagao / कलर्स चलाओ / Sony lagao | Live channel (needs its number in Setup) |
+| Channel 109 lagao / Agla channel | Tune by number / next channel |
 
 ## Building the app (laptop)
 ```bash

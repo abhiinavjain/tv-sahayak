@@ -66,6 +66,9 @@ fun SetupScreen(vm: MainViewModel, onClose: () -> Unit) {
     var pin by remember { mutableStateOf(s.pin) }
     var test by remember { mutableStateOf("") }
     var favourites by remember { mutableStateOf(s.extraCatalog) }
+    var liveKey by remember { mutableStateOf(s.liveTvKey) }
+    val channelList = remember { vm.channels() }
+    var channelNumbers by remember { mutableStateOf(channelList.associate { it.name to (it.number?.toString() ?: "") }) }
 
     Column(Modifier.fillMaxSize().background(Palette.background).verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -122,6 +125,19 @@ fun SetupScreen(vm: MainViewModel, onClose: () -> Unit) {
             Switch(volTv, { volTv = it }); Text("  Send volume to the LG TV (if the box volume keys don't change TV volume)")
         }
 
+        Section("TV channels (Airtel box)")
+        Text("Look up each channel's number in the box's Channel Guide and type it here. Then \"Star Plus lagao\" or the " +
+            "channel buttons tune it directly. Without a number, the channel opens in its app (JioHotstar / ZEE5 / SonyLIV).",
+            color = Palette.muted)
+        channelList.forEach { ch ->
+            Field("${ch.name} (${ch.hindiName})", channelNumbers[ch.name].orEmpty(), KeyboardType.Number) { v ->
+                channelNumbers = channelNumbers + (ch.name to v.filter(Char::isDigit).take(4))
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(liveKey, { liveKey = it }); Text("  Press Live TV before the number (turn off if the box shows a menu instead)")
+        }
+
         Section("5. Claude (only when offline rules fail)")
         Text("Used only for sentences the app couldn't understand by itself. Answers are remembered so the same sentence " +
             "works offline next time. Set a monthly spend limit in the Anthropic Console: a key stored on a phone can be extracted.",
@@ -160,8 +176,12 @@ fun SetupScreen(vm: MainViewModel, onClose: () -> Unit) {
             s.claudeDailyLimit = claudeLimit.toIntOrNull() ?: 30
             if (claudeKey.isNotBlank()) { s.claudeApiKey = claudeKey; claudeKey = "" }
             s.extraCatalog = favourites
+            s.liveTvKey = liveKey
+            s.channelNumbers = channelNumbers.mapNotNull { (k, v) -> v.toIntOrNull()?.let { k to it } }.toMap()
             if (pin.length >= 4) s.pin = pin
         }, Modifier.fillMaxWidth()) { Text("Save") }
+
+        Text("Made by Abhinav Jain · अभिनव जैन द्वारा बनाया गया", color = Palette.muted, fontSize = 13.sp)
 
         Section("Log")
         Text(log.takeLast(60).joinToString("\n"), fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = Palette.muted)

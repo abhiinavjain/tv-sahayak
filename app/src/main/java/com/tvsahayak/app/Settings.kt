@@ -33,6 +33,14 @@ class Settings(context: Context) {
     var claudeModel by str("claude_model", "claude-opus-5-5")
     var claudeDailyLimit by int("claude_daily_limit", 30)
     var dryRun by bool("dry_run", false)
+    var liveTvKey by bool("live_tv_key", true)
+    /** Channel numbers on the Airtel box, by channel name (e.g. "Zee TV" -> 109). */
+    var channelNumbers: Map<String, Int>
+        get() = runCatching {
+            val o = JSONObject(p.getString("channel_numbers", "{}")!!)
+            o.keys().asSequence().associateWith { o.getInt(it) }
+        }.getOrDefault(emptyMap())
+        set(v) = p.edit().putString("channel_numbers", JSONObject(v).toString()).apply()
     var pin by str("pin", "1234")
     /** Installed package for each app, found through `pm list packages` (ADB) on setup. */
     var resolvedPackages: Map<App, String>

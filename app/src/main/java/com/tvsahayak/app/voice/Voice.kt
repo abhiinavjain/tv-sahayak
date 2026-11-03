@@ -78,5 +78,8 @@ class Speaker(context: Context) {
         if (enabled && ready) tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "reply")
     }
 
+    /** Silences any reply in progress, so the mic doesn't hear the app's own voice as a command. */
+    fun stop() { if (ready) tts.stop() }
+
     fun shutdown() = tts.shutdown()
 }

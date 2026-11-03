@@ -28,6 +28,7 @@ class Executor(
         adb = settings.adbEnabled && adbReady,
         tv = settings.tvHost.isNotBlank() && settings.tvClientKey.isNotBlank(),
         volumeViaTv = settings.volumeViaTv,
+        liveTvKey = settings.liveTvKey,
     )
 
     suspend fun ensureConnections() {

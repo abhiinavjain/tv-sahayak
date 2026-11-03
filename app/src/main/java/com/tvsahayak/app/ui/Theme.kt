@@ -21,6 +21,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 object Palette {
     val background = Color(0xFF1B1B1F)
     val tile = Color(0xFF3A3A44)
+    val card = Color(0xFF2A2A33)
     val accent = Color(0xFFF57C00)
     val youtube = Color(0xFFC62828)
     val text = Color(0xFFFFFFFF)
