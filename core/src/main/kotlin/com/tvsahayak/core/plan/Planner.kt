@@ -39,7 +39,7 @@ class Planner(private val catalog: List<CatalogEntry>) {
         is Command.Volume -> volume(cmd, caps)
         is Command.PowerTv -> when {
             cmd.on && caps.tv -> listOf(Action.TvWake, Action.Say("टीवी चालू कर रहे हैं", "Turning TV on"))
-            !cmd.on && caps.tv -> listOf(Action.TvKey("KEY_POWER"), Action.Say("टीवी बंद कर रहे हैं", "Turning TV off"))
+            !cmd.on && caps.tv -> listOf(Action.TvOff, Action.Say("टीवी बंद कर रहे हैं", "Turning TV off"))
             else -> listOf(Action.Press(Key.POWER), Action.Say("पावर बटन दबाया", "Pressed power"))
         }
         is Command.OpenApp -> listOf(Action.LaunchApp(cmd.app), Action.Say("${cmd.app.hindiName} खोल रहे हैं", "Opening ${cmd.app.displayName}"))
