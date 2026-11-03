@@ -7,6 +7,7 @@ import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -121,7 +122,7 @@ class Discovery(private val context: Context) {
     suspend fun probe(host: String): String = coroutineScope {
         val ports = linkedMapOf(6466 to "TV Remote control", 6467 to "TV Remote pairing", 5555 to "ADB", 8009 to "Chromecast",
             3000 to "LG webOS", 3001 to "LG webOS (TLS)")
-        val open = ports.keys.map { p -> p to kotlinx.coroutines.async(Dispatchers.IO) { open(host, p) } }
+        val open = ports.keys.map { p -> p to async(Dispatchers.IO) { open(host, p) } }
             .filter { it.second.await() }.map { it.first }
         val guess = when {
             6466 in open || 6467 in open -> "This is an Android TV box ✔ (use it as Box IP)"
