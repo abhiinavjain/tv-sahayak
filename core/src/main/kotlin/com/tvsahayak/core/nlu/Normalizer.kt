@@ -23,8 +23,20 @@ object Normalizer {
             .replace("ee", "i").replace("oo", "u").replace("ou", "u").replace("aa", "a")
             .replace("ai", "e").replace("ay", "e").replace("y", "i")
         w = w.replace(Regex("(.)\\1+"), "$1")
+        if (w.length > 3 && w.endsWith("h") && w[w.length - 2] in "aeiou") w = w.dropLast(1) // ooltah, chashmah
         if (w.length > 4 && (w.endsWith("e") || w.endsWith("a"))) w = w.dropLast(1)
         return w
+    }
+
+    /** Consonants only: "kehlata" and "kahalaataa" both give "khlt", "yeh" and "yah" both give "yh". */
+    fun skeleton(folded: String): String = folded.filter { it !in "aeiou" }
+
+    /** Looser match for names of shows, channels and apps, where Hindi and English spellings differ most. */
+    fun sameName(a: String, b: String): Boolean {
+        if (same(a, b)) return true
+        val sa = skeleton(a); val sb = skeleton(b)
+        // One-consonant words ("yeh"/"yah" fold to "ieh"/"iah") also need the same first letter.
+        return sa == sb && (sa.length >= 2 || (sa.length == 1 && a[0] == b[0]))
     }
 
     /** Jaro-Winkler similarity, 0..1. */

@@ -5,6 +5,12 @@ enum class Key(val code: Int) {
     HOME(3), BACK(4), DPAD_UP(19), DPAD_DOWN(20), DPAD_LEFT(21), DPAD_RIGHT(22), DPAD_CENTER(23),
     VOLUME_UP(24), VOLUME_DOWN(25), POWER(26), ENTER(66), SEARCH(84), PLAY_PAUSE(85),
     STOP(86), NEXT(87), PREVIOUS(88), REWIND(89), FAST_FORWARD(90), MUTE(164), PLAY(126), PAUSE(127),
+    MENU(82), CHANNEL_UP(166), CHANNEL_DOWN(167), LIVE_TV(170), GUIDE(172), INFO(165),
+    D0(7), D1(8), D2(9), D3(10), D4(11), D5(12), D6(13), D7(14), D8(15), D9(16);
+
+    companion object {
+        fun digit(d: Int): Key = entries.first { it.name == "D$d" }
+    }
 }
 
 enum class VolumeDir { UP, DOWN, MUTE }
@@ -31,9 +37,10 @@ enum class App(
     PRIME_VIDEO("Prime Video", "प्राइम वीडियो", listOf("com.amazon.amazonvideo.livingroom"),
         listOf("prime video", "amazon prime", "prime", "amazon", "प्राइम वीडियो", "प्राइम", "अमेज़न प्राइम"), "https://app.primevideo.com"),
     ZEE5("ZEE5", "ज़ी फाइव", listOf("com.graymatrix.did"),
-        listOf("zee5", "zee 5", "zee five", "zee", "ज़ी फाइव", "जी फाइव", "ज़ी 5"), "https://www.zee5.com"),
+        listOf("zee5", "zee 5", "zee five", "ज़ी फाइव", "जी फाइव", "ज़ी 5"), "https://www.zee5.com"),
     SONYLIV("SonyLIV", "सोनी लिव", listOf("com.sonyliv"),
-        listOf("sonyliv", "sony liv", "sony live", "sony", "सोनी लिव", "सोनी लाइव", "सोनी"), "https://www.sonyliv.com"),
+        // Plain "Sony" means the Sony TV channel, so it is not an alias here.
+        listOf("sonyliv", "sony liv", "sony live", "सोनी लिव", "सोनी लाइव"), "https://www.sonyliv.com"),
     AIRTEL_XSTREAM("Airtel Xstream Play", "एयरटेल एक्सस्ट्रीम", listOf("tv.accedo.airtel.wynk", "com.airtel.xstream", "tv.airtel.xstream"),
         listOf("airtel xstream", "xstream", "airtel", "stream play", "एयरटेल", "एक्सस्ट्रीम", "एयरटेल एक्सस्ट्रीम"), "https://www.airtelxstream.in");
 
@@ -65,6 +72,8 @@ sealed interface Command {
     data class OpenApp(val app: App) : Command
     data class Search(val query: String, val app: App?) : Command
     data class Play(val title: String, val app: App?, val episode: EpisodeSelector? = null) : Command
+    /** Live TV channel on the Airtel box, by name ("Star Plus") or number ("channel 109"). */
+    data class Channel(val name: String?, val number: Int? = null) : Command
     data object Unknown : Command
 }
 

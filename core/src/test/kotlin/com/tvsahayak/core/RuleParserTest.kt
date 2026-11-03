@@ -111,6 +111,35 @@ class RuleParserTest {
         check("search karo", Command.Press(Key.SEARCH))
     }
 
+    @Test fun hindiSpellingsOfShowNames() {
+        // Exactly what the hi-IN recognizer produced on the real phone.
+        check("यह रिश्ता क्या कहलाता है चलाओ", Command.Play("Yeh Rishta Kya Kehlata Hai", App.JIOHOTSTAR))
+        check("तारक मेहता का उल्टा चश्मा लगाओ", Command.Play("Taarak Mehta Ka Ooltah Chashmah", App.SONYLIV))
+        check("गुम है किसी के प्यार में चलाओ", Command.Play("Ghum Hai Kisikey Pyaar Meiin", App.JIOHOTSTAR))
+        check("बिग बॉस लगाओ", Command.Play("Bigg Boss", App.JIOHOTSTAR))
+    }
+
+    @Test fun channels() {
+        check("स्टार प्लस लाइव टीवी चलाओ", Command.Channel("Star Plus"))
+        check("star plus lagao", Command.Channel("Star Plus"))
+        check("कलर्स चलाओ", Command.Channel("Colors"))
+        check("colors tv lagao", Command.Channel("Colors"))
+        check("ज़ी टीवी लगाओ", Command.Channel("Zee TV"))
+        check("zee tv chalao", Command.Channel("Zee TV"))
+        check("सोनी लगाओ", Command.Channel("Sony TV"))
+        check("sony sab lagao", Command.Channel("Sony SAB"))
+        check("channel 109 lagao", Command.Channel(null, 109))
+        check("109 लगाओ", Command.Channel(null, 109))
+        check("agla channel", Command.Press(Key.CHANNEL_UP))
+        check("channel badhao", Command.Press(Key.CHANNEL_UP))
+        check("pichla channel", Command.Press(Key.CHANNEL_DOWN))
+        // Names that only sound similar must not turn into channels or apps.
+        check("bhajan sunao", Command.Play("Bhajan", App.YOUTUBE))
+        check("sony liv kholo", Command.OpenApp(App.SONYLIV))
+        check("zee5 kholo", Command.OpenApp(App.ZEE5))
+        check("star plus ka anupama chalao", Command.Play("Anupamaa", App.JIOHOTSTAR))
+    }
+
     @Test fun lowConfidenceGoesToFallback() {
         assertTrue(parser.parse("mausam kaisa hai").confidence < 0.6)
         assertEquals(Command.Unknown, parser.parse("").command)

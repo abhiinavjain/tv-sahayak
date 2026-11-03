@@ -150,6 +150,22 @@ class PlannerTest {
         assertEquals(Action.LaunchLink("https://www.youtube.com/results?search_query=cricket+highlights", App.YOUTUBE), p.first())
     }
 
+    @Test fun channelByNumberTypesDigits() {
+        val p = Planner(DefaultCatalog.entries).plan(Command.Channel("Zee TV"), Capabilities())
+        assertEquals(listOf(Action.Press(Key.LIVE_TV), Action.Wait(1500), Action.Press(Key.D1), Action.Press(Key.D0), Action.Press(Key.D9)),
+            p.dropLast(1))
+    }
+
+    @Test fun channelWithoutNumberOpensStreamingApp() {
+        val p = planner.plan(Command.Channel("Star Plus"), Capabilities())
+        assertEquals(Action.LaunchLink("https://www.hotstar.com/in/explore?search_query=Star+Plus", App.JIOHOTSTAR), p.first())
+    }
+
+    @Test fun unknownSerialGoesToHotstarNotYoutube() {
+        assertEquals(App.JIOHOTSTAR, (planner.plan(Command.Play("mannat", null), Capabilities()).first() as Action.LaunchLink).app)
+        assertEquals(App.YOUTUBE, (planner.plan(Command.Play("jain bhajan", null), Capabilities()).first() as Action.LaunchLink).app)
+    }
+
     @Test fun volumeRoute() {
         assertEquals(Action.Press(Key.VOLUME_UP, 2), planner.plan(Command.Volume(VolumeDir.UP, 2), Capabilities()).first())
         assertEquals(Action.TvVolume(VolumeDir.UP, 2),

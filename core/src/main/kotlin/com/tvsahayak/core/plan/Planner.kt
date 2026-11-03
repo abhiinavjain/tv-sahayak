@@ -6,6 +6,8 @@ import com.tvsahayak.core.EpisodeSelector
 import com.tvsahayak.core.Key
 import com.tvsahayak.core.VolumeDir
 import com.tvsahayak.core.content.CatalogEntry
+import com.tvsahayak.core.content.Channel
+import com.tvsahayak.core.content.DefaultChannels
 import java.net.URLEncoder
 
 /** One step the phone performs. The app layer decides which transport carries it. */
@@ -30,9 +32,11 @@ data class Capabilities(
     val tv: Boolean = false,
     /** Send volume to the LG TV instead of the box (when the box's HDMI-CEC / SimpLink volume doesn't work). */
     val volumeViaTv: Boolean = false,
+    /** Press the remote's Live TV key before typing a channel number (needed when an app is in front). */
+    val liveTvKey: Boolean = true,
 )
 
-class Planner(private val catalog: List<CatalogEntry>) {
+class Planner(private val catalog: List<CatalogEntry>, private val channels: List<Channel> = DefaultChannels.list) {
 
     fun plan(cmd: Command, caps: Capabilities): List<Action> = when (cmd) {
         is Command.Press -> listOf(Action.Press(cmd.key, cmd.times), Action.Say(sayKey(cmd.key), cmd.key.name.lowercase()))
@@ -45,6 +49,7 @@ class Planner(private val catalog: List<CatalogEntry>) {
         is Command.OpenApp -> listOf(Action.LaunchApp(cmd.app), Action.Say("${cmd.app.hindiName} खोल रहे हैं", "Opening ${cmd.app.displayName}"))
         is Command.Search -> search(cmd.query, cmd.app ?: App.YOUTUBE, caps)
         is Command.Play -> play(cmd, caps)
+        is Command.Channel -> channel(cmd, caps)
         Command.Unknown -> listOf(Action.Say("माफ़ कीजिए, समझ नहीं आया। फिर से बोलिए।", "Sorry, I didn't understand. Please say it again."))
     }
 
@@ -82,7 +87,7 @@ class Planner(private val catalog: List<CatalogEntry>) {
 
     private fun play(cmd: Command.Play, caps: Capabilities): List<Action> {
         val entry = catalog.firstOrNull { it.title.equals(cmd.title, ignoreCase = true) }
-        val app = cmd.app ?: entry?.app ?: App.YOUTUBE
+        val app = cmd.app ?: entry?.app ?: defaultApp(cmd.title)
         val steps = mutableListOf<Action>()
         val link = entry?.deepLink?.takeIf { (cmd.app ?: entry.app) == entry.app }
         val name = entry?.title ?: cmd.title
@@ -108,6 +113,31 @@ class Planner(private val catalog: List<CatalogEntry>) {
         return steps
     }
 
+    private fun channel(cmd: Command.Channel, caps: Capabilities): List<Action> {
+        val ch = cmd.name?.let { n -> channels.firstOrNull { it.name.equals(n, ignoreCase = true) } }
+        val number = cmd.number ?: ch?.number
+        if (number == null) {
+            // No channel number set up yet: open the channel in its streaming app instead.
+            val app = ch?.app ?: App.JIOHOTSTAR
+            val steps = mutableListOf<Action>()
+            searchLink(app, ch?.name ?: "")?.let { steps += Action.LaunchLink(it, app) } ?: run { steps += Action.LaunchApp(app) }
+            steps += Action.Say("${ch?.hindiName ?: cmd.name} ${app.hindiName} पर खोल रहे हैं", "Opening ${ch?.name} on ${app.displayName}")
+            return steps
+        }
+        val steps = mutableListOf<Action>()
+        if (caps.liveTvKey) { steps += Action.Press(Key.LIVE_TV); steps += Action.Wait(1500) }
+        number.toString().forEach { steps += Action.Press(Key.digit(it - '0')) }
+        steps += Action.Say("${ch?.hindiName ?: "चैनल $number"} लगा दिया", "Channel ${ch?.name ?: number}")
+        return steps
+    }
+
+    /** Unknown names: songs/news/bhajans are on YouTube; serials and shows are most likely on JioHotstar. */
+    private fun defaultApp(title: String): App {
+        val youtubeWords = listOf("bhajan", "aarti", "gaana", "gaane", "gana", "song", "news", "katha", "kirtan", "video",
+            "comedy", "highlights", "recipe", "cartoon", "pravachan", "satsang")
+        return if (youtubeWords.any { title.lowercase().contains(it) }) App.YOUTUBE else App.JIOHOTSTAR
+    }
+
     private fun episodeLabels(sel: EpisodeSelector?) = when (sel) {
         EpisodeSelector.YESTERDAY -> listOf("Yesterday", "कल")
         else -> listOf("Latest Episode", "Latest", "New Episode", "Today", "आज", "नया एपिसोड", "Episode 1", "Episodes")
@@ -121,6 +151,9 @@ class Planner(private val catalog: List<CatalogEntry>) {
         Key.FAST_FORWARD -> "आगे कर रहे हैं"
         Key.REWIND -> "पीछे कर रहे हैं"
         Key.NEXT -> "अगला"
+        Key.CHANNEL_UP -> "अगला चैनल"
+        Key.CHANNEL_DOWN -> "पिछला चैनल"
+        Key.MUTE -> "आवाज़ बंद/चालू"
         else -> "ठीक है"
     }
 

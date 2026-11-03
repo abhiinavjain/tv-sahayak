@@ -14,7 +14,8 @@ object LlmIntent {
         letters), English or Hinglish, and may contain speech-recognition mistakes. The TV has an Airtel Xstream
         Android TV box with these apps: ${App.entries.joinToString { it.name }}.
         Fields:
-        - action: one of play, search, open_app, volume_up, volume_down, mute, key, tv_on, tv_off, unknown.
+        - action: one of play, search, open_app, channel, volume_up, volume_down, mute, key, tv_on, tv_off, unknown.
+          Use channel for live TV channels (Star Plus, Colors, Zee TV, Sony, Sony SAB, ...), with the channel name as title.
         - title: for play/search, the show, movie, channel or topic, correctly spelled in English letters
           (e.g. "Anupamaa", "Bigg Boss", "cricket highlights"). Empty otherwise.
         - app: the app the user named, or the one that streams this content in India, or "" if unsure.
@@ -28,7 +29,7 @@ object LlmIntent {
         {"type":"object","additionalProperties":false,
          "required":["action","title","app","episode","key","steps"],
          "properties":{
-          "action":{"type":"string","enum":["play","search","open_app","volume_up","volume_down","mute","key","tv_on","tv_off","unknown"]},
+          "action":{"type":"string","enum":["play","search","open_app","channel","volume_up","volume_down","mute","key","tv_on","tv_off","unknown"]},
           "title":{"type":"string"},
           "app":{"type":"string","enum":["", ${App.entries.joinToString { "\"${it.name}\"" }}]},
           "episode":{"type":"string","enum":["","latest","today","yesterday"]},
@@ -48,6 +49,7 @@ object LlmIntent {
             "play" -> if (title.isEmpty()) Command.Press(Key.PLAY) else Command.Play(title, app, episode)
             "search" -> Command.Search(title, app)
             "open_app" -> app?.let { Command.OpenApp(it) } ?: Command.Unknown
+            "channel" -> if (title.isEmpty()) Command.Unknown else Command.Channel(title)
             "volume_up" -> Command.Volume(VolumeDir.UP, maxOf(steps, 2))
             "volume_down" -> Command.Volume(VolumeDir.DOWN, maxOf(steps, 2))
             "mute" -> Command.Volume(VolumeDir.MUTE, 1)

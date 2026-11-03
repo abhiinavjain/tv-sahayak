@@ -7,6 +7,8 @@ import com.tvsahayak.core.Key
 import com.tvsahayak.core.ParseResult
 import com.tvsahayak.core.VolumeDir
 import com.tvsahayak.core.content.CatalogEntry
+import com.tvsahayak.core.content.Channel
+import com.tvsahayak.core.content.DefaultChannels
 import com.tvsahayak.core.content.Loanwords
 
 /**
@@ -17,6 +19,7 @@ class RuleParser(
     private val catalog: List<CatalogEntry>,
     /** Phrases Claude understood earlier, keyed by [key]. */
     private val learned: Map<String, Command> = emptyMap(),
+    channels: List<Channel> = DefaultChannels.list,
 ) {
     private fun set(vararg words: String) = words.flatMap { w -> Normalizer.tokens(w).map { it.folded } }.toSet()
 
@@ -46,6 +49,9 @@ class RuleParser(
     private val leftWords = set("left", "baaye", "baen", "बाएं", "बाएँ", "लेफ्ट")
     private val rightWords = set("right", "daaye", "daen", "दाएं", "दाएँ", "राइट")
     private val tvWords = set("tv", "television", "टीवी", "टी वी")
+    private val channelWords = set("channel", "चैनल", "number", "नंबर")
+    private val liveWords = set("live", "लाइव")
+    private val previousWords = set("pichla", "pichhla", "previous", "पिछला")
     private val todayWords = set("aaj", "today", "आज")
     private val yesterdayWords = set("kal", "yesterday", "कल")
     private val latestWords = set("latest", "naya", "nayi", "naye", "new", "last", "recent", "abhi", "नया", "नई", "नए", "लेटेस्ट", "लास्ट")
@@ -62,6 +68,11 @@ class RuleParser(
 
     private val appAliases: List<Pair<App, List<String>>> = App.entries
         .flatMap { app -> app.aliases.map { app to Normalizer.tokens(it).map { t -> t.folded } } }
+        .sortedByDescending { it.second.size }
+
+    private val channelAliases: List<Pair<Channel, List<String>>> = channels
+        .flatMap { c -> (c.aliases + c.name).map { c to Normalizer.tokens(it).map { t -> t.folded } } }
+        .filter { it.second.isNotEmpty() }
         .sortedByDescending { it.second.size }
 
     private val catalogAliases: List<Pair<CatalogEntry, List<String>>> = catalog
@@ -113,6 +124,24 @@ class RuleParser(
             if (dir != null) return ParseResult(Command.Volume(dir, if (dir == VolumeDir.MUTE) 1 else steps), 0.95)
         }
 
+        // Live TV channels: "Star Plus lagao", "channel 109 lagao", "channel badlo / agla channel".
+        if (app == null) {
+            val number = f.firstNotNullOfOrNull { it.toIntOrNull() }
+            val channelWord = has(channelWords)
+            if (channelWord && number != null) return ParseResult(Command.Channel(null, number), 0.95)
+            if (channelWord && (has(nextWords) || has(upWords) || has(forwardWords))) return ParseResult(Command.Press(Key.CHANNEL_UP), 0.9)
+            if (channelWord && (has(previousWords) || has(downWords) || has(rewindWords))) return ParseResult(Command.Press(Key.CHANNEL_DOWN), 0.9)
+            val glue = listOf(playVerbs, openVerbs, fillers, tvWords, channelWords, liveWords)
+            fun isGlue(i: Int) = glue.any { s -> s.any { Normalizer.same(f[i], it) } }
+            findPhrase(f, used, channelAliases)?.let { (ch, range) ->
+                if (f.indices.all { it in range || used[it] || isGlue(it) }) return ParseResult(Command.Channel(ch.name), 0.92)
+                // "Star Plus ka Anupama": the channel name is only context for the show.
+                range.forEach { used[it] = true }
+            }
+            if (number != null && (hasPlay || channelWord) && f.indices.all { f[it].toIntOrNull() != null || isGlue(it) })
+                return ParseResult(Command.Channel(null, number), 0.85)
+        }
+
         // Everything that isn't a command word is the title / search query.
         listOf(playVerbs, openVerbs, searchVerbs, todayWords, yesterdayWords, latestWords, episodeWords, fillers, tvWords)
             .forEach { mark(it) }
@@ -153,7 +182,7 @@ class RuleParser(
         val query = contentIdx.joinToString(" ") { Loanwords.restore(tokens[it].text, f[it]) }
 
         if (hasSearch) {
-            val exact = matchCatalog(f, contentIdx)?.takeIf { it.second == contentIdx.size }?.first
+            val exact = matchCatalog(f, contentIdx)?.takeIf { m -> m.second == contentIdx.count { i -> fillers.none { Normalizer.same(f[i], it) } } }?.first
             return if (query.isEmpty()) {
                 if (app != null) ParseResult(Command.Search("", app), 0.85) else ParseResult(Command.Press(Key.SEARCH), 0.8)
             } else ParseResult(Command.Search(exact?.searchQuery ?: exact?.title ?: query, app ?: exact?.app), 0.9)
@@ -164,7 +193,7 @@ class RuleParser(
             val verb = hasPlay || hasOpen || episodeSel != null
             if (match != null) {
                 val (entry, covered) = match
-                val leftovers = covered < contentIdx.size
+                val leftovers = covered < contentIdx.count { i -> fillers.none { Normalizer.same(f[i], it) } }
                 return if (!leftovers) {
                     val sel = if (entry.episodic) episodeSel else null
                     ParseResult(Command.Play(entry.title, app ?: entry.app, sel), if (verb) 0.92 else 0.75, "catalog")
@@ -181,26 +210,34 @@ class RuleParser(
         return ParseResult(Command.Unknown, 0.0, "no rule")
     }
 
+    /**
+     * Names are compared loosely (by consonants) when that is safe: multi-word names, or long single words.
+     * Short single words stay strict, so "sunao" never matches "Sony".
+     */
+    private fun nameMatch(token: String, aliasWord: String, alias: List<String>) =
+        if (alias.size >= 2 || Normalizer.skeleton(aliasWord).length >= 4) Normalizer.sameName(token, aliasWord)
+        else Normalizer.same(token, aliasWord)
+
     /** Finds the longest alias whose tokens all appear contiguously in unused positions. */
     private fun <T> findPhrase(f: List<String>, used: BooleanArray, aliases: List<Pair<T, List<String>>>): Pair<T, IntRange>? {
         for ((item, alias) in aliases) {
             for (start in 0..f.size - alias.size) {
                 val range = start until start + alias.size
-                if (range.all { !used[it] && Normalizer.same(f[it], alias[it - start]) }) return item to range
+                if (range.all { !used[it] && nameMatch(f[it], alias[it - start], alias) }) return item to range
             }
         }
         return null
     }
 
-    /** Best catalog entry among content tokens, plus how many content tokens it covers. */
+    /** Best catalog entry among the non-filler content tokens, plus how many of them it covers. */
     private fun matchCatalog(f: List<String>, contentIdx: List<Int>): Pair<CatalogEntry, Int>? {
-        val content = contentIdx.map { f[it] }
+        val content = contentIdx.map { f[it] }.filter { w -> fillers.none { Normalizer.same(w, it) } }
         var best: Pair<CatalogEntry, Int>? = null
         for ((entry, alias) in catalogAliases) {
             // Alias tokens may include filler words ("ka", "kya"); compare on content words only, in order.
             val aliasContent = alias.filter { a -> fillers.none { Normalizer.same(a, it) } }.ifEmpty { alias }
             for (start in 0..content.size - aliasContent.size) {
-                if (aliasContent.indices.all { Normalizer.same(content[start + it], aliasContent[it]) }) {
+                if (aliasContent.indices.all { nameMatch(content[start + it], aliasContent[it], aliasContent) }) {
                     if (best == null || aliasContent.size > best.second) best = entry to aliasContent.size
                     break
                 }
