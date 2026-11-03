@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -95,13 +96,12 @@ private val shadowText = TextStyle(shadow = Shadow(Color.Black.copy(alpha = 0.45
  * Hindi labels, on the wallpaper chosen in Setup. When the big mic scrolls away a smaller one floats at the bottom.
  */
 @Composable
-fun FamilyScreen(vm: MainViewModel, onMic: () -> Unit, onSetup: () -> Unit) {
+fun FamilyScreen(vm: MainViewModel, onMic: () -> Unit, onSetup: () -> Unit, scroll: ScrollState = rememberScrollState()) {
     val ui by vm.ui.collectAsState()
     val box by vm.boxState.collectAsState()
     val w by vm.wallpaper.collectAsState()
     var askPin by remember { mutableStateOf(false) }
     var showNumbers by remember { mutableStateOf(false) }
-    val scroll = rememberScrollState()
     val listening = ui.phase == Phase.LISTENING
 
     Box(Modifier.fillMaxSize()) {

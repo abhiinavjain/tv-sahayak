@@ -5,3 +5,6 @@ local.properties
 .idea/
 captures/
 *.apk
+*.mp4
+tools/video/*.png
+tools/video/*.wav
