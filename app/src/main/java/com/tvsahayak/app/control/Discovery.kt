@@ -1,60 +1,120 @@
 package com.tvsahayak.app.control
 
 import android.content.Context
+import android.net.ConnectivityManager
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.net.DatagramPacket
 import java.net.DatagramSocket
+import java.net.Inet4Address
 import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.net.SocketTimeoutException
 import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
 
-/** Finds the Airtel box (mDNS, Android TV Remote service) and the LG TV (SSDP, webOS second screen) on the Wi-Fi. */
+/**
+ * Finds the Airtel box and the LG TV on the Wi-Fi three ways, because phones and routers often drop multicast:
+ * mDNS (Android TV Remote service), SSDP (LG webOS), and a sweep of the phone's /24 subnet for the
+ * TV Remote port 6466 and LG's 3000/3001.
+ */
 class Discovery(private val context: Context) {
 
-    data class Device(val kind: Kind, val name: String, val host: String)
+    data class Device(val kind: Kind, val name: String, val host: String, val via: String)
     enum class Kind { BOX, LG_TV }
 
-    fun scan(): Flow<Device> = callbackFlow {
+    fun scan(log: (String) -> Unit): Flow<Device> = callbackFlow {
         val nsd = context.getSystemService(NsdManager::class.java)
         val wifi = context.applicationContext.getSystemService(WifiManager::class.java)
         val lock = wifi.createMulticastLock("tvsahayak").apply { setReferenceCounted(false); acquire() }
         val executor = Executors.newSingleThreadExecutor()
 
+        // Before Android 14 only one resolve may run at a time, so resolves are queued.
+        val toResolve = LinkedBlockingQueue<NsdServiceInfo>()
+        val resolver = launch(Dispatchers.IO) {
+            while (true) {
+                val info = runInterruptibleTake(toResolve) ?: break
+                val done = java.util.concurrent.CountDownLatch(1)
+                val cb = object : NsdManager.ResolveListener {
+                    override fun onResolveFailed(s: NsdServiceInfo, code: Int) { log("mDNS: could not resolve ${s.serviceName} (code $code)"); done.countDown() }
+                    override fun onServiceResolved(s: NsdServiceInfo) {
+                        val host = if (Build.VERSION.SDK_INT >= 34) s.hostAddresses.firstOrNull { it is Inet4Address }?.hostAddress
+                            ?: s.hostAddresses.firstOrNull()?.hostAddress
+                        else @Suppress("DEPRECATION") s.host?.hostAddress
+                        if (host != null) trySend(Device(Kind.BOX, s.serviceName, host, "mDNS"))
+                        done.countDown()
+                    }
+                }
+                if (Build.VERSION.SDK_INT >= 34) nsd.resolveService(info, executor, cb) else @Suppress("DEPRECATION") nsd.resolveService(info, cb)
+                done.await(4, java.util.concurrent.TimeUnit.SECONDS)
+            }
+        }
+
         val boxListener = object : NsdManager.DiscoveryListener {
             override fun onDiscoveryStarted(t: String) = Unit
             override fun onDiscoveryStopped(t: String) = Unit
-            override fun onStartDiscoveryFailed(t: String, code: Int) = Unit
+            override fun onStartDiscoveryFailed(t: String, code: Int) = log("mDNS search failed to start (code $code)")
             override fun onStopDiscoveryFailed(t: String, code: Int) = Unit
             override fun onServiceLost(s: NsdServiceInfo) = Unit
-            override fun onServiceFound(s: NsdServiceInfo) {
-                val cb = object : NsdManager.ResolveListener {
-                    override fun onResolveFailed(s: NsdServiceInfo, code: Int) = Unit
-                    override fun onServiceResolved(s: NsdServiceInfo) {
-                        val host = if (Build.VERSION.SDK_INT >= 34) s.hostAddresses.firstOrNull()?.hostAddress
-                        else @Suppress("DEPRECATION") s.host?.hostAddress
-                        if (host != null) trySend(Device(Kind.BOX, s.serviceName, host))
-                    }
-                }
-                if (Build.VERSION.SDK_INT >= 34) nsd.resolveService(s, executor, cb) else @Suppress("DEPRECATION") nsd.resolveService(s, cb)
-            }
+            override fun onServiceFound(s: NsdServiceInfo) { toResolve.offer(s) }
         }
-        nsd.discoverServices("_androidtvremote2._tcp.", NsdManager.PROTOCOL_DNS_SD, boxListener)
+        nsd.discoverServices("_androidtvremote2._tcp", NsdManager.PROTOCOL_DNS_SD, boxListener)
 
-        launch(Dispatchers.IO) { ssdpLg().forEach { trySend(it) } }
+        launch(Dispatchers.IO) {
+            runCatching { ssdpLg().forEach { trySend(it) } }.onFailure { log("SSDP failed: ${it.message}") }
+        }
+        launch(Dispatchers.IO) {
+            runCatching { sweep(log) { trySend(it) } }.onFailure { log("Network sweep failed: ${it.message}") }
+        }
 
         awaitClose {
             runCatching { nsd.stopServiceDiscovery(boxListener) }
+            resolver.cancel(); toResolve.clear()
             lock.release(); executor.shutdown()
         }
     }
+
+    private suspend fun runInterruptibleTake(q: LinkedBlockingQueue<NsdServiceInfo>): NsdServiceInfo? =
+        kotlinx.coroutines.runInterruptible { q.take() }
+
+    /** The phone's Wi-Fi IPv4 address and prefix, e.g. 192.168.1.23/24. */
+    private fun localSubnet(): Pair<Inet4Address, Int>? {
+        val cm = context.getSystemService(ConnectivityManager::class.java)
+        val lp = cm.getLinkProperties(cm.activeNetwork) ?: return null
+        val la = lp.linkAddresses.firstOrNull { it.address is Inet4Address } ?: return null
+        return (la.address as Inet4Address) to la.prefixLength
+    }
+
+    private suspend fun sweep(log: (String) -> Unit, found: (Device) -> Unit) = coroutineScope {
+        val (me, prefix) = localSubnet() ?: run { log("Not on Wi-Fi?"); return@coroutineScope }
+        log("Checking every address on ${me.hostAddress}/$prefix …")
+        val b = me.address
+        // Big networks are cut down to the phone's own /24; homes are almost always /24 anyway.
+        val hosts = (1..254).map { InetAddress.getByAddress(byteArrayOf(b[0], b[1], b[2], it.toByte())) }.filter { it != me }
+        val gate = Semaphore(48)
+        for (h in hosts) launch(Dispatchers.IO) {
+            gate.withPermit {
+                val ip = h.hostAddress ?: return@withPermit
+                if (open(ip, 6466)) found(Device(Kind.BOX, "Android TV", ip, "port 6466"))
+                if (open(ip, 3001) || open(ip, 3000)) found(Device(Kind.LG_TV, "Maybe LG TV", ip, "port 3000/3001"))
+            }
+        }
+    }
+
+    private fun open(host: String, port: Int): Boolean = runCatching {
+        Socket().use { it.connect(InetSocketAddress(host, port), 400) }; true
+    }.getOrDefault(false)
 
     private fun ssdpLg(): List<Device> {
         val st = "urn:lge-com:service:webos-second-screen:1"
@@ -68,10 +128,10 @@ class Discovery(private val context: Context) {
                 while (true) {
                     val p = DatagramPacket(buf, buf.size); s.receive(p)
                     val text = String(p.data, 0, p.length)
-                    if (!text.contains("webos", ignoreCase = true) && !text.contains("LG", ignoreCase = false)) continue
+                    if (!text.contains("webos", ignoreCase = true) && !text.contains("lge", ignoreCase = true)) continue
                     val host = p.address.hostAddress ?: continue
                     val name = Regex("(?im)^DLNADeviceName\\.lge\\.com:\\s*(.+)$").find(text)?.groupValues?.get(1)?.trim() ?: "LG TV"
-                    found[host] = Device(Kind.LG_TV, name, host)
+                    found[host] = Device(Kind.LG_TV, name, host, "SSDP")
                 }
             } catch (_: SocketTimeoutException) { }
         }

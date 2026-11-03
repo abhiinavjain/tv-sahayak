@@ -4,6 +4,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
@@ -32,8 +33,10 @@ object Palette {
 @Composable
 fun SahayakTheme(content: @Composable () -> Unit) = MaterialTheme(
     colorScheme = darkColorScheme(primary = Palette.accent, background = Palette.background, surface = Color(0xFF26262C)),
-    content = content,
-)
+) {
+    // Surface sets white as the default text colour; without it plain Text comes out black on the dark background.
+    Surface(color = Palette.background, contentColor = Palette.text, content = content)
+}
 
 /** Keeps the Setup screen away from accidental taps. */
 @Composable

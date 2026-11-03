@@ -47,6 +47,7 @@ fun SetupScreen(vm: MainViewModel, onClose: () -> Unit) {
     val log by vm.log.collectAsState()
     val pairing by vm.pairing.collectAsState()
     val box by vm.boxState.collectAsState()
+    val scanning by vm.scanning.collectAsState()
 
     var boxHost by remember { mutableStateOf(s.boxHost) }
     var tvHost by remember { mutableStateOf(s.tvHost) }
@@ -71,7 +72,12 @@ fun SetupScreen(vm: MainViewModel, onClose: () -> Unit) {
         }
 
         Section("1. Find devices on Wi-Fi")
-        OutlinedButton(onClick = vm::scan) { Text("Scan") }
+        Text("Keep the box and TV switched on, and the phone on the same Wi-Fi.", color = Palette.muted)
+        OutlinedButton(onClick = vm::scan, enabled = !scanning) { Text(if (scanning) "Scanning… (15 s)" else "Scan") }
+        if (!scanning && found.isEmpty() && log.any { it.startsWith("Scan finished") }) {
+            Text("Nothing found. Type the IP addresses below instead: on the box, Settings → Network & Internet → your Wi-Fi; " +
+                "on the LG TV, Settings → General → Network → Wi-Fi Connection → Advanced settings.", color = Palette.warn)
+        }
         found.forEach { d ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("${if (d.kind == Discovery.Kind.BOX) "📦 Box" else "📺 LG TV"}  ${d.name}  ${d.host}", Modifier.weight(1f))

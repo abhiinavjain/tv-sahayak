@@ -103,14 +103,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var scanJob: Job? = null
     private val _found = MutableStateFlow(listOf<Discovery.Device>())
     val found = _found.asStateFlow()
+    private val _scanning = MutableStateFlow(false)
+    val scanning = _scanning.asStateFlow()
 
     fun scan() {
         scanJob?.cancel()
         _found.value = emptyList()
+        _scanning.value = true
+        log("Scan started")
         scanJob = viewModelScope.launch {
-            withTimeoutOrNull(10_000) {
-                app.discovery.scan().collect { d -> _found.update { l -> if (l.any { it.host == d.host && it.kind == d.kind }) l else l + d } }
+            withTimeoutOrNull(15_000) {
+                app.discovery.scan(::log).collect { d ->
+                    _found.update { l ->
+                        val same = l.firstOrNull { it.host == d.host && it.kind == d.kind }
+                        when {
+                            same == null -> { log("found ${d.kind} ${d.name} ${d.host} (${d.via})"); l + d }
+                            // A real name from mDNS/SSDP beats the sweep's guess.
+                            same.via.startsWith("port") && !d.via.startsWith("port") -> l - same + d
+                            else -> l
+                        }
+                    }
+                }
             }
+            _scanning.value = false
+            log("Scan finished: ${_found.value.size} device(s)")
         }
     }
 
