@@ -9,7 +9,9 @@ import com.tvsahayak.core.VolumeDir
 import com.tvsahayak.core.plan.Action
 import com.tvsahayak.core.plan.Capabilities
 import com.tvsahayak.core.plan.UiDump
+import com.tvsahayak.core.App
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Runs a plan from the core [com.tvsahayak.core.plan.Planner] over whichever connections are set up. */
 class Executor(
@@ -63,11 +65,12 @@ class Executor(
                         tv.wake(settings.tvMac)
                     }
                     is Action.LaunchApp -> {
-                        val pkg = settings.packageFor(a.app)
-                        if (adbReady) adb.launch(pkg) else boxRemote { remote.openLink(pkg) }
+                        if (adbReady) adb.launch(settings.packageFor(a.app))
+                        else if (!openVerified(a.app, appLinks(a.app), log)) return Outcome(null, "${a.app.hindiName} नहीं खुला", log)
                     }
                     is Action.LaunchLink -> {
-                        if (adbReady) adb.view(a.uri, settings.packageFor(a.app)) else boxRemote { remote.openLink(a.uri) }
+                        if (adbReady) adb.view(a.uri, settings.packageFor(a.app))
+                        else if (!openVerified(a.app, listOf(a.uri) + appLinks(a.app), log)) return Outcome(null, "${a.app.hindiName} नहीं खुला", log)
                     }
                     is Action.Type -> if (adbReady) adb.type(a.text) else boxRemote { remote.type(a.text) }
                     is Action.Select -> {
@@ -90,6 +93,31 @@ class Executor(
             }
         }
         return Outcome(say, null, log)
+    }
+
+    /** Ways to open an app through the TV Remote protocol, most likely to work first. */
+    private fun appLinks(app: App): List<String> =
+        listOf(app.webLink) + (listOf(settings.packageFor(app)) + app.packages).distinct().map { "market://launch?id=$it" }
+
+    /**
+     * Sends links one by one until the box reports the wanted app in front. If the box never reports the
+     * front app we can't tell, so every link is tried (opening the same app twice is harmless).
+     */
+    private suspend fun openVerified(app: App, links: List<String>, log: MutableList<String>): Boolean {
+        val wanted = (app.packages + settings.packageFor(app)).toSet()
+        for (link in links) {
+            val before = remote.currentApp
+            boxRemote { remote.openLink(link) }
+            log += "  sent $link"
+            if (before in wanted) return true
+            val front = withTimeoutOrNull(4000) {
+                while (remote.currentApp == before || remote.currentApp == null) delay(200)
+                remote.currentApp
+            }
+            log += "  app in front: ${front ?: "not reported"}"
+            if (front in wanted) return true
+        }
+        return remote.currentApp == null
     }
 
     private suspend fun selectWithRetry(labels: List<String>): UiDump.Node? {

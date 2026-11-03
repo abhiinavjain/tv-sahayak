@@ -35,6 +35,8 @@ class AtvRemote(private val certs: CertStore, private val scope: CoroutineScope)
     /** Package of the app in front, reported by the box when a text field gets focus. */
     @Volatile var currentApp: String? = null; private set
     @Volatile var tvIsOn: Boolean? = null; private set
+    /** Diagnostic lines for the Setup log (what the box reports). */
+    var onLog: ((String) -> Unit)? = null
 
     private var socket: SSLSocket? = null
     private var job: Job? = null
@@ -122,12 +124,16 @@ class AtvRemote(private val certs: CertStore, private val scope: CoroutineScope)
                 m.has(RemoteMsg.CONFIGURE) -> send(RemoteMsg.configure(Build.MODEL, Build.MANUFACTURER))
                 m.has(RemoteMsg.SET_ACTIVE) -> { send(RemoteMsg.setActive()); _state.value = State.CONNECTED }
                 m.has(RemoteMsg.PING_REQUEST) -> send(RemoteMsg.pingResponse(m.message(RemoteMsg.PING_REQUEST)?.long(1) ?: 0))
-                m.has(RemoteMsg.IME_KEY_INJECT) -> m.message(RemoteMsg.IME_KEY_INJECT)?.message(1)?.string(12)?.let { currentApp = it }
+                m.has(RemoteMsg.IME_KEY_INJECT) -> m.message(RemoteMsg.IME_KEY_INJECT)?.message(1)?.string(12)?.let {
+                    if (it != currentApp) onLog?.invoke("box: app in front = $it")
+                    currentApp = it
+                }
                 m.has(RemoteMsg.IME_BATCH_EDIT) -> m.message(RemoteMsg.IME_BATCH_EDIT)?.let {
                     imeCounter = it.long(1) ?: imeCounter; fieldCounter = it.long(2) ?: fieldCounter
                 }
                 m.has(RemoteMsg.START) -> tvIsOn = m.message(RemoteMsg.START)?.long(1) == 1L
-                m.has(RemoteMsg.ERROR) -> Log.w(TAG, "box reported an error")
+                m.has(RemoteMsg.ERROR) -> onLog?.invoke("box reported an error: ${m.message(RemoteMsg.ERROR)?.fields?.keys}")
+                else -> onLog?.invoke("box sent message field(s) ${m.fields.keys}")
             }
         }
     }

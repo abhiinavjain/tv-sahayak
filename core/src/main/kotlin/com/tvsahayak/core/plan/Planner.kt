@@ -60,20 +60,24 @@ class Planner(private val catalog: List<CatalogEntry>) {
 
     private fun search(query: String, app: App, caps: Capabilities): List<Action> {
         val steps = mutableListOf<Action>()
-        if (query.isBlank()) {
-            steps += Action.LaunchApp(app); steps += Action.Wait(3000); steps += Action.Press(Key.SEARCH)
-        } else {
-            steps += searchSteps(query, app, caps)
-        }
-        steps += Action.Say("${app.hindiName} पर \"$query\" ढूंढ रहे हैं".replace(" पर \"\"", ""), "Searching $query on ${app.displayName}")
+        val reached = if (query.isBlank()) { steps += Action.LaunchApp(app); false } else searchSteps(query, app, caps, steps)
+        steps += if (reached || query.isBlank()) Action.Say("${app.hindiName} पर \"$query\" ढूंढ रहे हैं".replace(" पर \"\"", " खोल दिया"), "Searching $query on ${app.displayName}")
+        else Action.Say("${app.hindiName} खोल दिया। \"$query\" चुनिए।", "Opened ${app.displayName}. Pick $query.")
         return steps
     }
 
-    private fun searchSteps(query: String, app: App, caps: Capabilities): List<Action> {
-        searchLink(app, query)?.let { return listOf(Action.LaunchLink(it, app), Action.Wait(4000)) }
-        // Generic: open the app, open its search screen, type, submit. Typing works through ADB or the remote's keyboard.
-        return listOf(Action.LaunchApp(app), Action.Wait(5000), Action.Press(Key.SEARCH), Action.Wait(1500),
+    /**
+     * Adds the steps that get [query]'s results on screen. Returns false when only the app could be opened:
+     * without ADB there is no reliable way into an app's own search box (the remote's Search key opens
+     * Google Assistant on Android TV, not the app's search).
+     */
+    private fun searchSteps(query: String, app: App, caps: Capabilities, steps: MutableList<Action>): Boolean {
+        searchLink(app, query)?.let { steps += Action.LaunchLink(it, app); steps += Action.Wait(4000); return true }
+        steps += Action.LaunchApp(app)
+        if (!caps.adb) return false
+        steps += listOf(Action.Wait(5000), Action.Select(SEARCH_LABELS), Action.Wait(1500),
             Action.Type(query), Action.Wait(500), Action.Press(Key.ENTER), Action.Wait(3000))
+        return true
     }
 
     private fun play(cmd: Command.Play, caps: Capabilities): List<Action> {
@@ -81,11 +85,16 @@ class Planner(private val catalog: List<CatalogEntry>) {
         val app = cmd.app ?: entry?.app ?: App.YOUTUBE
         val steps = mutableListOf<Action>()
         val link = entry?.deepLink?.takeIf { (cmd.app ?: entry.app) == entry.app }
+        val name = entry?.title ?: cmd.title
         if (link != null) {
             steps += Action.LaunchLink(link, app); steps += Action.Wait(5000)
         } else {
-            steps += searchSteps(entry?.searchQuery ?: cmd.title, app, caps)
+            val reached = searchSteps(entry?.searchQuery ?: cmd.title, app, caps, steps)
             if (caps.adb) steps += Action.Select(listOf(cmd.title) + entry?.aliases.orEmpty().take(2))
+            if (!reached) {
+                steps += Action.Say("${app.hindiName} खोल दिया। $name चुनकर OK दबाइए।", "Opened ${app.displayName}. Choose $name and press OK.")
+                return steps
+            }
         }
         if (caps.adb) {
             steps += Action.Wait(3000)
@@ -116,6 +125,7 @@ class Planner(private val catalog: List<CatalogEntry>) {
     }
 
     companion object {
+        val SEARCH_LABELS = listOf("Search", "खोजें", "सर्च", "Search for movies, shows")
         val PLAY_LABELS = listOf("Play", "Watch Now", "Watch", "Resume", "Continue Watching", "Start Watching",
             "Play Episode", "देखें", "अभी देखें", "चलाएं", "प्ले")
 

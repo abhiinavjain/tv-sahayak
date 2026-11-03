@@ -122,13 +122,15 @@ class PlannerTest {
         assertEquals(Action.LaunchApp(App.JIOHOTSTAR), p.first())
         assertTrue(p.contains(Action.Type("Anupamaa")))
         val selects = p.filterIsInstance<Action.Select>()
-        assertEquals(3, selects.size)
+        assertEquals(4, selects.size) // search box, show, episode, Play
         assertEquals(Planner.PLAY_LABELS, selects.last().labels)
     }
 
-    @Test fun withoutAdbAsksToPressOk() {
+    @Test fun withoutAdbOpensAppAndAsksToChoose() {
         val p = planner.plan(Command.Play("Anupamaa", App.JIOHOTSTAR, EpisodeSelector.LATEST), Capabilities())
-        assertTrue(p.none { it is Action.Select })
+        assertEquals(Action.LaunchApp(App.JIOHOTSTAR), p.first())
+        // The Search key opens Google Assistant on Android TV, so it must not be pressed or typed into.
+        assertTrue(p.none { it is Action.Select || it is Action.Type || it == Action.Press(Key.SEARCH) })
         assertTrue((p.last() as Action.Say).hindi.contains("OK"))
     }
 

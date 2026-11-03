@@ -45,6 +45,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val voice = VoiceInput(application)
 
+    init { app.remote.onLog = { log(it) } }
+
     private fun catalog(): List<CatalogEntry> = DefaultCatalog.entries + settings.extraCatalog
     private fun log(line: String) = _log.update { (it + line).takeLast(200) }
 
