@@ -8,6 +8,7 @@ import com.tvsahayak.core.VolumeDir
 import com.tvsahayak.core.content.CatalogEntry
 import com.tvsahayak.core.content.Channel
 import com.tvsahayak.core.content.DefaultChannels
+import com.tvsahayak.core.content.HotstarEpisodes
 import java.net.URLEncoder
 
 /** One step the phone performs. The app layer decides which transport carries it. */
@@ -19,6 +20,12 @@ sealed interface Action {
     data object TvWake : Action
     data class LaunchApp(val app: App) : Action
     data class LaunchLink(val uri: String, val app: App) : Action
+    /**
+     * JioHotstar episode: the phone reads the public show page (found by [query] when [showUrl] is null), picks the
+     * episode that aired on [date] (newest when null) and opens that episode's own link on the TV.
+     * If no episode matches, the show page itself is opened.
+     */
+    data class OpenEpisode(val showUrl: String?, val query: String, val date: java.time.LocalDate?) : Action
     data class Type(val text: String) : Action
     data class Wait(val ms: Long) : Action
     /** ADB only: read the screen and click the element whose text best matches one of [labels]. */
@@ -91,6 +98,16 @@ class Planner(private val catalog: List<CatalogEntry>, private val channels: Lis
         val steps = mutableListOf<Action>()
         val link = entry?.deepLink?.takeIf { (cmd.app ?: entry.app) == entry.app }
         val name = entry?.title ?: cmd.title
+        // Serials on JioHotstar go straight to the right episode: newest by default, or the day she asked for.
+        val wantsEpisode = cmd.date != null || cmd.episode != null || entry?.episodic == true
+        val hotstarShow = link?.takeIf { HotstarEpisodes.isShowPage(it) }
+        if (app == App.JIOHOTSTAR && wantsEpisode && (hotstarShow != null || link == null)) {
+            steps += Action.OpenEpisode(hotstarShow, entry?.searchQuery ?: cmd.title, cmd.date)
+            steps += if (cmd.date != null) Action.Say("$name, ${HotstarEpisodes.hindiDate(cmd.date)} का एपिसोड चला रहे हैं",
+                "Playing $name, episode of ${HotstarEpisodes.englishDate(cmd.date)}")
+            else Action.Say("$name का नया एपिसोड चला रहे हैं", "Playing the latest episode of $name")
+            return steps
+        }
         if (link != null) {
             steps += Action.LaunchLink(link, app); steps += Action.Wait(5000)
         } else {
@@ -168,6 +185,7 @@ class Planner(private val catalog: List<CatalogEntry>, private val channels: Lis
         fun searchLink(app: App, q: String): String? = when (app) {
             App.YOUTUBE -> "https://www.youtube.com/results?search_query=${enc(q)}"
             App.JIOHOTSTAR -> "https://www.hotstar.com/in/explore?search_query=${enc(q)}"
+            App.ZEE5 -> "https://www.zee5.com/search?q=${enc(q)}"
             else -> null
         }
     }

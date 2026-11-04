@@ -1,6 +1,7 @@
 package com.tvsahayak.core
 
 import com.tvsahayak.core.content.DefaultCatalog
+import com.tvsahayak.core.content.HotstarEpisodes
 import com.tvsahayak.core.nlu.LlmIntent
 import com.tvsahayak.core.plan.Action
 import com.tvsahayak.core.plan.Capabilities
@@ -118,9 +119,9 @@ class PlannerTest {
     }
 
     @Test fun latestEpisodeWithAdbSelectsEpisodeThenPlay() {
-        val p = planner.plan(Command.Play("Kumkum Bhagya", App.ZEE5, EpisodeSelector.LATEST), Capabilities(adb = true))
-        assertEquals(Action.LaunchApp(App.ZEE5), p.first())
-        assertTrue(p.contains(Action.Type("Kumkum Bhagya")))
+        val p = planner.plan(Command.Play("CID", App.SONYLIV, EpisodeSelector.LATEST), Capabilities(adb = true))
+        assertEquals(Action.LaunchApp(App.SONYLIV), p.first())
+        assertTrue(p.contains(Action.Type("CID")))
         val selects = p.filterIsInstance<Action.Select>()
         assertEquals(4, selects.size) // search box, show, episode, Play
         assertEquals(Planner.PLAY_LABELS, selects.last().labels)
@@ -128,8 +129,7 @@ class PlannerTest {
 
     @Test fun knownShowOpensItsPageDirectly() {
         val p = planner.plan(Command.Play("Anupamaa", App.JIOHOTSTAR, EpisodeSelector.LATEST), Capabilities())
-        assertEquals(Action.LaunchLink("https://www.hotstar.com/in/shows/anupamaa/1260022017", App.JIOHOTSTAR), p.first())
-        assertTrue((p.last() as Action.Say).hindi.contains("OK"))
+        assertEquals(Action.OpenEpisode("https://www.hotstar.com/in/shows/anupamaa/1260022017", "Anupamaa", null), p.first())
     }
 
     @Test fun unknownHotstarShowUsesSearchLink() {
@@ -137,9 +137,23 @@ class PlannerTest {
         assertEquals(Action.LaunchLink("https://www.hotstar.com/in/explore?search_query=Jhanak", App.JIOHOTSTAR), p.first())
     }
 
+    @Test fun episodeByDate() {
+        val d = java.time.LocalDate.of(2026, 10, 30)
+        val p = planner.plan(Command.Play("Udne Ki Aasha", App.JIOHOTSTAR, null, d), Capabilities())
+        assertEquals(Action.OpenEpisode("https://www.hotstar.com/in/shows/udne-ki-aasha/1271270408", "Udne Ki Aasha", d), p.first())
+        assertTrue((p.last() as Action.Say).hindi.contains("30 अक्टूबर"))
+        // Unknown serial with a date: find the show by search first.
+        assertEquals(Action.OpenEpisode(null, "jhanak", d), planner.plan(Command.Play("jhanak", null, null, d), Capabilities()).first())
+    }
+
+    @Test fun zee5UsesSearchLink() {
+        val p = planner.plan(Command.Play("Kumkum Bhagya", App.ZEE5), Capabilities())
+        assertEquals(Action.LaunchLink("https://www.zee5.com/search?q=Kumkum+Bhagya", App.ZEE5), p.first())
+    }
+
     @Test fun withoutAdbOpensAppAndAsksToChoose() {
-        val p = planner.plan(Command.Play("Kumkum Bhagya", App.ZEE5, EpisodeSelector.LATEST), Capabilities())
-        assertEquals(Action.LaunchApp(App.ZEE5), p.first())
+        val p = planner.plan(Command.Play("CID", App.SONYLIV, EpisodeSelector.LATEST), Capabilities())
+        assertEquals(Action.LaunchApp(App.SONYLIV), p.first())
         // The Search key opens Google Assistant on Android TV, so it must not be pressed or typed into.
         assertTrue(p.none { it is Action.Select || it is Action.Type || it == Action.Press(Key.SEARCH) })
         assertTrue((p.last() as Action.Say).hindi.contains("OK"))
@@ -162,7 +176,7 @@ class PlannerTest {
     }
 
     @Test fun unknownSerialGoesToHotstarNotYoutube() {
-        assertEquals(App.JIOHOTSTAR, (planner.plan(Command.Play("mannat", null), Capabilities()).first() as Action.LaunchLink).app)
+        assertEquals(App.JIOHOTSTAR, (planner.plan(Command.Play("jhanak", null), Capabilities()).first() as Action.LaunchLink).app)
         assertEquals(App.YOUTUBE, (planner.plan(Command.Play("jain bhajan", null), Capabilities()).first() as Action.LaunchLink).app)
     }
 
@@ -195,6 +209,30 @@ class UiDumpTest {
 
     @Test fun findsTodayEpisode() {
         assertTrue(UiDump.find(UiDump.parse(xml), listOf("Today"))!!.label.contains("Today"))
+    }
+}
+
+class HotstarEpisodesTest {
+    // Copied from the real Udne Ki Aasha page.
+    private val links = listOf(
+        HotstarEpisodes.Link("/in/shows/udne-ki-aasha/1271270408/sachin-takes-a-risky-step/1641040157/watch", "Watch Latest Episode 4 Nov"),
+        HotstarEpisodes.Link("/in/shows/udne-ki-aasha/1271270408/sachin-takes-a-risky-step/1641040157/watch", "Sachin Takes a Risky Step S2 E964 4 Nov 2026 27m"),
+        HotstarEpisodes.Link("/in/shows/udne-ki-aasha/1271270408/whom-will-sailee-prioritise/1641040008/watch", "Whom Will Sailee Prioritise? S2 E963 3 Nov 2026 28m"),
+        HotstarEpisodes.Link("/in/shows/udne-ki-aasha/1271270408/sachin-sailee-seek-guidance/1641039608/watch", "Sachin, Sailee Seek Guidance S2 E959 30 Oct 2026 28m"),
+    )
+
+    @Test fun picksByDateOrLatest() {
+        assertEquals("https://www.hotstar.com/in/shows/udne-ki-aasha/1271270408/sachin-sailee-seek-guidance/1641039608/watch",
+            HotstarEpisodes.pick(links, java.time.LocalDate.of(2026, 10, 30)))
+        assertEquals("https://www.hotstar.com/in/shows/udne-ki-aasha/1271270408/sachin-takes-a-risky-step/1641040157/watch",
+            HotstarEpisodes.pick(links, null))
+        assertNull(HotstarEpisodes.pick(links, java.time.LocalDate.of(2026, 10, 1)))
+    }
+
+    @Test fun findsShowInSearchResults() {
+        val results = listOf(HotstarEpisodes.Link("/in/shows/dr-aarambhi/1271522330/dr-aarambhi/1641040109/watch?x=1", ""),
+            HotstarEpisodes.Link("/in/shows/dr-aarambhi/1271522330?search_query=x", "Dr. Aarambhi"))
+        assertEquals("https://www.hotstar.com/in/shows/dr-aarambhi/1271522330", HotstarEpisodes.showFromSearch(results))
     }
 }
 

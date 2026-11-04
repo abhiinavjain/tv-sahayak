@@ -6,9 +6,11 @@ import com.tvsahayak.core.nlu.Transliterator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.LocalDate
 
 class RuleParserTest {
-    private val parser = RuleParser(DefaultCatalog.entries)
+    private val today = LocalDate.of(2026, 11, 4) // a Wednesday
+    private val parser = RuleParser(DefaultCatalog.entries, today = { today })
 
     private fun check(text: String, expected: Command, minConfidence: Double = 0.6) {
         val r = parser.parse(text)
@@ -18,7 +20,7 @@ class RuleParserTest {
 
     private val anupamaLatest = Command.Play("Anupamaa", App.JIOHOTSTAR, EpisodeSelector.LATEST)
     private val strangerThings = Command.Play("Stranger Things", App.NETFLIX)
-    private val biggBossToday = Command.Play("Bigg Boss", App.JIOHOTSTAR, EpisodeSelector.TODAY)
+    private val biggBossToday = Command.Play("Bigg Boss", App.JIOHOTSTAR, EpisodeSelector.TODAY, LocalDate.of(2026, 11, 4))
     private val volUp = Command.Volume(VolumeDir.UP, 2)
 
     @Test fun userExamples() {
@@ -90,8 +92,8 @@ class RuleParserTest {
 
     @Test fun shows() {
         check("anupama lagao", Command.Play("Anupamaa", App.JIOHOTSTAR))
-        check("anupamaa ka aaj ka episode dikhao", Command.Play("Anupamaa", App.JIOHOTSTAR, EpisodeSelector.TODAY))
-        check("kal ka anupama episode chalao", Command.Play("Anupamaa", App.JIOHOTSTAR, EpisodeSelector.YESTERDAY))
+        check("anupamaa ka aaj ka episode dikhao", Command.Play("Anupamaa", App.JIOHOTSTAR, EpisodeSelector.TODAY, today))
+        check("kal ka anupama episode chalao", Command.Play("Anupamaa", App.JIOHOTSTAR, EpisodeSelector.YESTERDAY, today.minusDays(1)))
         check("big boss chalao", Command.Play("Bigg Boss", App.JIOHOTSTAR))
         check("tarak mehta ka naya episode lagao", Command.Play("Taarak Mehta Ka Ooltah Chashmah", App.SONYLIV, EpisodeSelector.LATEST))
         check("तारक मेहता चलाओ", Command.Play("Taarak Mehta Ka Ooltah Chashmah", App.SONYLIV))
@@ -140,13 +142,31 @@ class RuleParserTest {
         check("star plus ka anupama chalao", Command.Play("Anupamaa", App.JIOHOTSTAR))
     }
 
+    @Test fun grandmasSerialsByDate() {
+        val aarambhi = { d: LocalDate? -> Command.Play("Dr. Aarambhi", App.JIOHOTSTAR, null, d) }
+        check("Dr arambhi ka 27 oct ka ep lagao", aarambhi(LocalDate.of(2026, 10, 27)))
+        check("डॉक्टर आरंभी का 27 अक्टूबर का एपिसोड लगाओ", aarambhi(LocalDate.of(2026, 10, 27)))
+        check("udne ki asha ka 30 oct ka ep lagao", Command.Play("Udne Ki Aasha", App.JIOHOTSTAR, null, LocalDate.of(2026, 10, 30)))
+        check("उड़ने की आशा का 30 अक्टूबर का एपिसोड लगाओ", Command.Play("Udne Ki Aasha", App.JIOHOTSTAR, null, LocalDate.of(2026, 10, 30)))
+        check("mannat ka 2 tarikh ka episode", Command.Play("Mannat", App.JIOHOTSTAR, null, LocalDate.of(2026, 11, 2)))
+        check("मन्नत का सोमवार का एपिसोड", Command.Play("Mannat", App.JIOHOTSTAR, null, LocalDate.of(2026, 11, 2)))
+        check("mahadev and sons parso ka episode", Command.Play("Mahadev & Sons", App.JIOHOTSTAR, null, LocalDate.of(2026, 11, 2)))
+        check("kyuki rishto ke bhi roop badalte hai lagao", Command.Play("Kyunki Rishton Ke Bhi Roop Badalte Hain", App.JIOHOTSTAR))
+        check("क्योंकि रिश्तों के भी रूप बदलते हैं चलाओ", Command.Play("Kyunki Rishton Ke Bhi Roop Badalte Hain", App.JIOHOTSTAR))
+        check("udne ki aasha 28th october", Command.Play("Udne Ki Aasha", App.JIOHOTSTAR, null, LocalDate.of(2026, 10, 28)))
+        // A date later than today means last year's.
+        check("anupama 25 december ka episode", Command.Play("Anupamaa", App.JIOHOTSTAR, null, LocalDate.of(2025, 12, 25)))
+        // Dates must not turn into channel numbers or volume steps.
+        check("mannat ka 3 nov ka ep", Command.Play("Mannat", App.JIOHOTSTAR, null, LocalDate.of(2026, 11, 3)))
+    }
+
     @Test fun lowConfidenceGoesToFallback() {
         assertTrue(parser.parse("mausam kaisa hai").confidence < 0.6)
         assertEquals(Command.Unknown, parser.parse("").command)
     }
 
     @Test fun learnedPhrasesWin() {
-        val learned = RuleParser(DefaultCatalog.entries, mapOf(parser.key("woh saas bahu wala") to anupamaLatest))
+        val learned = RuleParser(DefaultCatalog.entries, today = { today }, learned = mapOf(parser.key("woh saas bahu wala") to anupamaLatest))
         assertEquals(anupamaLatest, learned.parse("Woh saas bahu wala").command)
     }
 

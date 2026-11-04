@@ -71,7 +71,8 @@ sealed interface Command {
     data class PowerTv(val on: Boolean) : Command
     data class OpenApp(val app: App) : Command
     data class Search(val query: String, val app: App?) : Command
-    data class Play(val title: String, val app: App?, val episode: EpisodeSelector? = null) : Command
+    /** [date]: the episode that aired that day ("27 Oct ka ep", "kal ka"); null with LATEST means the newest one. */
+    data class Play(val title: String, val app: App?, val episode: EpisodeSelector? = null, val date: java.time.LocalDate? = null) : Command
     /** Live TV channel on the Airtel box, by name ("Star Plus") or number ("channel 109"). */
     data class Channel(val name: String?, val number: Int? = null) : Command
     data object Unknown : Command

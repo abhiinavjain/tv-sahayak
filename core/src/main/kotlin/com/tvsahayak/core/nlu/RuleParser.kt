@@ -9,6 +9,8 @@ import com.tvsahayak.core.VolumeDir
 import com.tvsahayak.core.content.CatalogEntry
 import com.tvsahayak.core.content.Channel
 import com.tvsahayak.core.content.DefaultChannels
+import java.time.DayOfWeek
+import java.time.LocalDate
 import com.tvsahayak.core.content.Loanwords
 
 /**
@@ -20,6 +22,8 @@ class RuleParser(
     /** Phrases Claude understood earlier, keyed by [key]. */
     private val learned: Map<String, Command> = emptyMap(),
     channels: List<Channel> = DefaultChannels.list,
+    /** "Today" for relative dates; fixed in tests. */
+    private val today: () -> LocalDate = { LocalDate.now() },
 ) {
     private fun set(vararg words: String) = words.flatMap { w -> Normalizer.tokens(w).map { it.folded } }.toSet()
 
@@ -55,6 +59,22 @@ class RuleParser(
     private val todayWords = set("aaj", "today", "आज")
     private val yesterdayWords = set("kal", "yesterday", "कल")
     private val latestWords = set("latest", "naya", "nayi", "naye", "new", "last", "recent", "abhi", "नया", "नई", "नए", "लेटेस्ट", "लास्ट")
+    private val dayBeforeYesterdayWords = set("parso", "parson", "परसों", "परसो")
+    private val dateWords = set("tarikh", "tareekh", "date", "तारीख", "तारीख़")
+    private val monthNames: Map<String, Int> = listOf(
+        listOf("january", "jan", "janvari", "janwari", "जनवरी"), listOf("february", "feb", "farvari", "faravari", "फरवरी", "फ़रवरी"),
+        listOf("march", "mar", "marach", "मार्च"), listOf("april", "apr", "aprail", "अप्रैल"), listOf("may", "mai", "मई"),
+        listOf("june", "jun", "joon", "जून"), listOf("july", "jul", "julai", "जुलाई"), listOf("august", "aug", "agast", "अगस्त"),
+        listOf("september", "sep", "sept", "sitambar", "सितंबर", "सितम्बर"), listOf("october", "oct", "aktubar", "अक्टूबर", "ऑक्टोबर"),
+        listOf("november", "nov", "navambar", "नवंबर", "नवम्बर"), listOf("december", "dec", "disambar", "दिसंबर", "दिसम्बर"),
+    ).flatMapIndexed { i, names -> set(*names.toTypedArray()).map { it to i + 1 } }.toMap()
+    private val weekdayNames: Map<String, DayOfWeek> = listOf(
+        listOf("monday", "somvar", "somwar", "सोमवार") to DayOfWeek.MONDAY, listOf("tuesday", "mangalvar", "mangalwar", "मंगलवार") to DayOfWeek.TUESDAY,
+        listOf("wednesday", "budhvar", "budhwar", "बुधवार") to DayOfWeek.WEDNESDAY,
+        listOf("thursday", "guruvar", "guruwar", "brihaspativar", "गुरुवार", "बृहस्पतिवार") to DayOfWeek.THURSDAY,
+        listOf("friday", "shukravar", "shukrawar", "शुक्रवार") to DayOfWeek.FRIDAY, listOf("saturday", "shanivar", "shaniwar", "शनिवार") to DayOfWeek.SATURDAY,
+        listOf("sunday", "ravivar", "raviwar", "रविवार", "इतवार", "itvar") to DayOfWeek.SUNDAY,
+    ).flatMap { (names, d) -> set(*names.toTypedArray()).map { it to d } }.toMap()
     private val episodeWords = set("episode", "episodes", "ep", "part", "bhag", "एपिसोड", "भाग")
     private val fillers = set("karo", "kar", "kare", "karein", "kariye", "karna", "kardo", "do", "de", "dijiye", "dena", "par", "pe",
         "per", "mein", "me", "mai", "in", "ka", "ki", "ke", "ko", "please", "plz", "zara", "jara", "mujhe", "hume", "humein",
@@ -96,6 +116,7 @@ class RuleParser(
 
         val app = findPhrase(f, used, appAliases)?.let { (a, range) -> range.forEach { used[it] = true }; a }
         findPhrase(f, used, catalogAliases.filter { it.second.size >= 2 })?.second?.forEach { protected[it] = true }
+        val date = findDate(f, used, protected)
 
         val steps = f.firstNotNullOfOrNull { it.toIntOrNull() ?: numberWords[it] }?.coerceIn(1, 20)
             ?: when {
@@ -106,11 +127,18 @@ class RuleParser(
 
         val hasPlay = has(playVerbs); val hasOpen = has(openVerbs); val hasSearch = has(searchVerbs)
         val episodeSel = when {
+            date != null || has(dayBeforeYesterdayWords) -> null
             has(todayWords) -> EpisodeSelector.TODAY
             has(yesterdayWords) -> EpisodeSelector.YESTERDAY
             has(latestWords) -> EpisodeSelector.LATEST
             has(episodeWords) -> EpisodeSelector.LATEST
             else -> null
+        }
+
+        val episodeDate = date ?: when (episodeSel) {
+            EpisodeSelector.TODAY -> today()
+            EpisodeSelector.YESTERDAY -> today().minusDays(1)
+            else -> if (has(dayBeforeYesterdayWords)) today().minusDays(2) else null
         }
 
         // Volume and mute
@@ -126,7 +154,7 @@ class RuleParser(
 
         // Live TV channels: "Star Plus lagao", "channel 109 lagao", "channel badlo / agla channel".
         if (app == null) {
-            val number = f.firstNotNullOfOrNull { it.toIntOrNull() }
+            val number = f.indices.firstNotNullOfOrNull { if (used[it]) null else f[it].toIntOrNull() }
             val channelWord = has(channelWords)
             if (channelWord && number != null) return ParseResult(Command.Channel(null, number), 0.95)
             if (channelWord && (has(nextWords) || has(upWords) || has(forwardWords))) return ParseResult(Command.Press(Key.CHANNEL_UP), 0.9)
@@ -143,7 +171,7 @@ class RuleParser(
         }
 
         // Everything that isn't a command word is the title / search query.
-        listOf(playVerbs, openVerbs, searchVerbs, todayWords, yesterdayWords, latestWords, episodeWords, fillers, tvWords)
+        listOf(playVerbs, openVerbs, searchVerbs, todayWords, yesterdayWords, dayBeforeYesterdayWords, latestWords, episodeWords, fillers, tvWords)
             .forEach { mark(it) }
         // "on" is a preposition in "play X on Netflix" but a command in "TV on karo".
         if (app != null || hasPlay || hasSearch) mark(set("on"))
@@ -196,18 +224,56 @@ class RuleParser(
                 val leftovers = covered < contentIdx.count { i -> fillers.none { Normalizer.same(f[i], it) } }
                 return if (!leftovers) {
                     val sel = if (entry.episodic) episodeSel else null
-                    ParseResult(Command.Play(entry.title, app ?: entry.app, sel), if (verb) 0.92 else 0.75, "catalog")
+                    val d = if (entry.episodic) episodeDate else null
+                    ParseResult(Command.Play(entry.title, app ?: entry.app, sel, d), if (verb || d != null) 0.92 else 0.75, "catalog")
                 } else {
                     val defaultApp = if (entry.searchQuery == null) entry.app else null
-                    ParseResult(Command.Play(query, app ?: defaultApp, episodeSel), if (verb) 0.75 else 0.5, "catalog+extra")
+                    ParseResult(Command.Play(query, app ?: defaultApp, episodeSel, episodeDate), if (verb) 0.75 else 0.5, "catalog+extra")
                 }
             }
-            return ParseResult(Command.Play(query, app, episodeSel), if (verb) 0.65 else 0.35, "unknown title")
+            return ParseResult(Command.Play(query, app, episodeSel, episodeDate), if (verb || episodeDate != null) 0.65 else 0.35, "unknown title")
         }
 
         if (app != null) return ParseResult(Command.OpenApp(app), if (hasOpen || hasPlay) 0.95 else 0.8)
         if (hasPlay) return ParseResult(Command.Press(Key.PLAY), 0.8)
         return ParseResult(Command.Unknown, 0.0, "no rule")
+    }
+
+    /**
+     * Finds an episode date: "27 oct", "oct 27", "27 तारीख", "27th", "सोमवार का", "परसों". Marks those words used.
+     * A date that would be in the future means last year's / last month's.
+     */
+    private fun findDate(f: List<String>, used: BooleanArray, protected: BooleanArray): LocalDate? {
+        val now = today()
+        fun day(i: Int) = f.getOrNull(i)?.let { Regex("^(\\d{1,2})(st|nd|rd|th)?$").find(it)?.groupValues?.get(1)?.toInt() }?.takeIf { it in 1..31 }
+        fun month(i: Int) = f.getOrNull(i)?.let { w -> monthNames[w] ?: monthNames.entries.firstOrNull { (k, _) -> k.length >= 5 && Normalizer.same(w, k) }?.value }
+        for (i in f.indices) {
+            if (used[i] || protected[i]) continue
+            val d = day(i) ?: continue
+            val m = month(i + 1) ?: month(i - 1)
+            val tarikh = f.getOrNull(i + 1)?.let { w -> dateWords.any { Normalizer.same(w, it) } } == true
+            if (m == null && !tarikh) continue
+            val date = if (m != null) {
+                runCatching { LocalDate.of(now.year, m, d) }.getOrNull()?.let { if (it.isAfter(now)) it.minusYears(1) else it }
+            } else {
+                runCatching { now.withDayOfMonth(d) }.getOrNull()?.let { if (it.isAfter(now)) it.minusMonths(1) else it }
+            } ?: continue
+            used[i] = true
+            listOf(i - 1, i + 1).forEach { j -> if (j in f.indices && (month(j) != null || dateWords.any { Normalizer.same(f[j], it) })) used[j] = true }
+            return date
+        }
+        for (i in f.indices) {
+            if (used[i] || protected[i]) continue
+            val wd = weekdayNames[f[i]] ?: continue
+            // Only "somvar ka (episode)": a bare weekday word is too easy to confuse ("sunday" folds like "sound").
+            val next = f.getOrNull(i + 1) ?: continue
+            if (listOf("ka", "ki", "ke", "vala", "vali").none { it == next } && episodeWords.none { Normalizer.same(next, it) }) continue
+            used[i] = true
+            var d = now
+            while (d.dayOfWeek != wd) d = d.minusDays(1)
+            return d
+        }
+        return null
     }
 
     /**
