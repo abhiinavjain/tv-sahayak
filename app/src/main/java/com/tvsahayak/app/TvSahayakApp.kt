@@ -5,6 +5,7 @@ import com.tvsahayak.app.control.AtvRemote
 import com.tvsahayak.app.control.BoxAdb
 import com.tvsahayak.app.control.CertStore
 import com.tvsahayak.app.control.Discovery
+import com.tvsahayak.app.control.EpisodeFinder
 import com.tvsahayak.app.control.LgTv
 import com.tvsahayak.app.exec.Executor
 import com.tvsahayak.app.voice.Speaker
@@ -30,7 +31,7 @@ class TvSahayakApp : Application() {
         remote = AtvRemote(CertStore(this), scope)
         adb = BoxAdb(this)
         tv = LgTv { key -> settings.tvClientKey = key }
-        executor = Executor(settings, remote, adb, tv)
+        executor = Executor(settings, remote, adb, tv, EpisodeFinder(this))
         claude = ClaudeFallback(settings)
         speaker = Speaker(this)
         discovery = Discovery(this)

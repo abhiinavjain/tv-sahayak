@@ -81,6 +81,8 @@ Setup → **Test without speaking** → type a command → **Run**. With **Dry r
 | Cricket highlights search karo | YouTube search |
 | Ruko / Chalao / Wapas jao / Aage karo | Pause / play / back / fast-forward |
 | TV band karo / TV chalu karo | LG TV off / on |
+| Udne Ki Aasha lagao | Plays the newest episode directly (JioHotstar serials) |
+| Dr Aarambhi ka 27 Oct ka ep lagao / मन्नत का कल का एपिसोड / सोमवार का एपिसोड | Plays the episode of that day |
 | Star Plus lagao / कलर्स चलाओ / Sony lagao | Live channel (needs its number in Setup) |
 | Channel 109 lagao / Agla channel | Tune by number / next channel |
 

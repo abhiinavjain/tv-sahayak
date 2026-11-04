@@ -118,7 +118,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun run(cmd: Command) {
         val plan = Planner(catalog(), channels()).plan(cmd, app.executor.capabilities())
-        val out = app.executor.run(plan)
+        val out = app.executor.run(plan) { msg -> _ui.update { it.copy(reply = msg) } }
         out.log.forEach { log("  $it") }
         val reply = out.error ?: out.say ?: "ठीक है"
         if (cmd !is Command.Press) app.speaker.say(reply)

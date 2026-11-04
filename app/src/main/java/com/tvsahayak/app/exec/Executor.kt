@@ -9,7 +9,10 @@ import com.tvsahayak.core.VolumeDir
 import com.tvsahayak.core.plan.Action
 import com.tvsahayak.core.plan.Capabilities
 import com.tvsahayak.core.plan.UiDump
+import com.tvsahayak.app.control.EpisodeFinder
 import com.tvsahayak.core.App
+import com.tvsahayak.core.content.HotstarEpisodes
+import com.tvsahayak.core.plan.Planner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -19,6 +22,7 @@ class Executor(
     private val remote: AtvRemote,
     private val adb: BoxAdb,
     private val tv: LgTv,
+    private val episodes: EpisodeFinder,
 ) {
     data class Outcome(val say: String?, val error: String?, val log: List<String>)
 
@@ -38,9 +42,10 @@ class Executor(
         }
     }
 
-    suspend fun run(actions: List<Action>): Outcome {
+    suspend fun run(actions: List<Action>, progress: (String) -> Unit = {}): Outcome {
         val log = mutableListOf<String>()
         var say: String? = null
+        var note: String? = null // replaces the planned reply when something had to fall back
         if (settings.dryRun) {
             actions.forEach { log += "(dry run) $it"; if (it is Action.Say) say = it.hindi }
             return Outcome(say, null, log)
@@ -73,6 +78,25 @@ class Executor(
                         if (adbReady) adb.view(a.uri, settings.packageFor(a.app))
                         else if (!openVerified(a.app, listOf(a.uri) + appLinks(a.app), log)) return Outcome(null, "${a.app.hindiName} नहीं खुला", log)
                     }
+                    is Action.OpenEpisode -> {
+                        progress("एपिसोड ढूंढ रहे हैं…")
+                        val show = a.showUrl ?: HotstarEpisodes.showFromSearch(episodes.links(Planner.searchLink(App.JIOHOTSTAR, a.query)!!) {
+                            HotstarEpisodes.showFromSearch(it) != null
+                        })
+                        val episode = show?.let { s ->
+                            HotstarEpisodes.pick(episodes.links(s) { l -> HotstarEpisodes.pick(l, a.date) != null }, a.date)
+                        }
+                        log += "  show: ${show ?: "not found"}"
+                        log += "  episode: ${episode ?: "not found"}"
+                        val target = episode ?: show ?: Planner.searchLink(App.JIOHOTSTAR, a.query)!!
+                        if (episode == null) note = when {
+                            show == null -> "\"${a.query}\" हॉटस्टार पर ढूंढ रहे हैं"
+                            a.date != null -> "${HotstarEpisodes.hindiDate(a.date!!)} का एपिसोड नहीं मिला। शो खोल दिया, एपिसोड चुनिए।"
+                            else -> "शो खोल दिया। चलाने के लिए OK दबाइए।"
+                        }
+                        if (adbReady) adb.view(target, settings.packageFor(App.JIOHOTSTAR))
+                        else if (!openVerified(App.JIOHOTSTAR, listOf(target), log)) return Outcome(null, "जियो हॉटस्टार नहीं खुला", log)
+                    }
                     is Action.Type -> if (adbReady) adb.type(a.text) else boxRemote { remote.type(a.text) }
                     is Action.Select -> {
                         if (!adbReady) continue
@@ -93,7 +117,7 @@ class Executor(
                 return Outcome(null, "कुछ गड़बड़ हो गई: ${e.message ?: e.javaClass.simpleName}", log)
             }
         }
-        return Outcome(say, null, log)
+        return Outcome(note ?: say, null, log)
     }
 
     /** Ways to open an app through the TV Remote protocol, most likely to work first. */

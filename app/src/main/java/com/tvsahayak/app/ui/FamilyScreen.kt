@@ -115,7 +115,7 @@ fun FamilyScreen(vm: MainViewModel, onMic: () -> Unit, onSetup: () -> Unit, scro
                 Box(Modifier.size(44.dp).clip(CircleShape).background(Brush.linearGradient(listOf(w.gold, w.accent))),
                     contentAlignment = Alignment.Center) { Icon(Icons.Default.Tv, null, Modifier.size(26.dp), tint = Color(0xFF3B1A00)) }
                 Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                    Text("टीवी सहायक", fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = w.gold, style = shadowText)
+                    Text("टीवी सहायक", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = w.gold, style = shadowText)
                     val (dot, label) = when (box) {
                         AtvRemote.State.CONNECTED -> Palette.ok to "टीवी बॉक्स जुड़ा है"
                         AtvRemote.State.CONNECTING -> Palette.warn to "जोड़ रहे हैं…"
@@ -123,7 +123,7 @@ fun FamilyScreen(vm: MainViewModel, onMic: () -> Unit, onSetup: () -> Unit, scro
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(9.dp).background(dot, CircleShape))
-                        Text(label, color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp))
+                        Text(label, color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(start = 6.dp))
                     }
                 }
                 IconButton(onClick = { askPin = true }, Modifier.glass(CircleShape, 0.08f)) {
@@ -132,53 +132,27 @@ fun FamilyScreen(vm: MainViewModel, onMic: () -> Unit, onSetup: () -> Unit, scro
             }
 
             // What the app heard and did
-            Column(Modifier.fillMaxWidth().padding(top = 14.dp).glass(RoundedCornerShape(24.dp)).padding(horizontal = 16.dp, vertical = 14.dp),
+            Column(Modifier.fillMaxWidth().padding(top = 12.dp).warmCard(w).padding(horizontal = 16.dp, vertical = 14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(ui.reply, color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
-                    lineHeight = 30.sp, style = shadowText)
-                if (ui.heard.isNotBlank()) Text("“${ui.heard}”", color = w.gold.copy(alpha = 0.9f), fontSize = 17.sp,
+                Text(ui.reply, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center,
+                    lineHeight = 36.sp, style = shadowText)
+                if (ui.heard.isNotBlank()) Text("“${ui.heard}”", color = w.gold.copy(alpha = 0.9f), fontSize = 20.sp,
                     textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
             }
 
             HeroMic(w, listening, onMic)
 
-            SectionTitle(w, Icons.Default.LiveTv, "चैनल")
-            val channels = listOf(
-                Triple("Star Plus", "स्टार प्लस", listOf(Color(0xFFFF8F00), Color(0xFFD84315))),
-                Triple("Colors", "कलर्स", listOf(Color(0xFFAB47BC), Color(0xFFEC407A))),
-                Triple("Zee TV", "ज़ी टीवी", listOf(Color(0xFF5C6BC0), Color(0xFF8E24AA))),
-                Triple("Sony TV", "सोनी", listOf(Color(0xFF1E88E5), Color(0xFF283593))),
-                Triple("Sony SAB", "सोनी सब", listOf(Color(0xFF43A047), Color(0xFF00897B))),
-                Triple("Star Bharat", "स्टार भारत", listOf(Color(0xFFE53935), Color(0xFFAD1457))),
-            )
-            Grid(channels, 3) { (name, hindi, colors) ->
-                BrandTile(hindi, Modifier.weight(1f).height(76.dp), colors) { vm.command(Command.Channel(name)) }
-            }
-
-            SectionTitle(w, Icons.Default.Apps, "ऐप्स")
-            val apps = listOf(
-                Triple(App.JIOHOTSTAR, "हॉटस्टार", listOf(Color(0xFF1A237E), Color(0xFF7B1FA2))),
-                Triple(App.YOUTUBE, "यूट्यूब", listOf(Color(0xFFFF1744), Color(0xFFB71C1C))),
-                Triple(App.ZEE5, "ज़ी5", listOf(Color(0xFF6A1B9A), Color(0xFF311B92))),
-                Triple(App.SONYLIV, "सोनी लिव", listOf(Color(0xFF37474F), Color(0xFF102027))),
-                Triple(App.NETFLIX, "नेटफ्लिक्स", listOf(Color(0xFFE50914), Color(0xFF3A0006))),
-                Triple(App.PRIME_VIDEO, "प्राइम", listOf(Color(0xFF00A8E1), Color(0xFF01579B))),
-            )
-            Grid(apps, 3) { (app, hindi, colors) ->
-                BrandTile(hindi, Modifier.weight(1f).height(66.dp), colors) { vm.openApp(app) }
-            }
-
-            SectionTitle(w, Icons.Default.SettingsRemote, "रिमोट")
-            Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(32.dp), 0.08f).padding(vertical = 18.dp, horizontal = 12.dp),
+            Column(Modifier.fillMaxWidth().glass(RoundedCornerShape(32.dp), 0.08f).padding(vertical = 16.dp, horizontal = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
+                // OK and arrows first, right under the mic: after "…OK दबाइए" there is nothing to scroll for.
+                DPad(w, onKey = vm::press)
+                Spacer(Modifier.height(16.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     RoundKey(Icons.Default.PowerSettingsNew, "टीवी बंद", Brush.linearGradient(listOf(Color(0xFFFF5252), Color(0xFFB71C1C)))) { vm.command(Command.PowerTv(false)) }
                     RoundKey(Icons.AutoMirrored.Filled.VolumeOff, "म्यूट") { vm.command(Command.Volume(VolumeDir.MUTE, 1)) }
                     RoundKey(Icons.Default.Home, "होम") { vm.press(Key.HOME) }
                     RoundKey(Icons.AutoMirrored.Filled.ArrowBack, "पीछे") { vm.press(Key.BACK) }
                 }
-                Spacer(Modifier.height(18.dp))
-                DPad(w, onKey = vm::press)
                 Spacer(Modifier.height(18.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Rocker("आवाज़", onUp = { vm.command(Command.Volume(VolumeDir.UP, 1)) }, onDown = { vm.command(Command.Volume(VolumeDir.DOWN, 1)) })
@@ -201,9 +175,36 @@ fun FamilyScreen(vm: MainViewModel, onMic: () -> Unit, onSetup: () -> Unit, scro
                 }
             }
 
+
+            SectionTitle(w, Icons.Default.LiveTv, "चैनल")
+            val channels = listOf(
+                Triple("Star Plus", "स्टार प्लस", listOf(Color(0xFFFF8F00), Color(0xFFD84315))),
+                Triple("Colors", "कलर्स", listOf(Color(0xFFAB47BC), Color(0xFFEC407A))),
+                Triple("Zee TV", "ज़ी टीवी", listOf(Color(0xFF5C6BC0), Color(0xFF8E24AA))),
+                Triple("Sony TV", "सोनी", listOf(Color(0xFF1E88E5), Color(0xFF283593))),
+                Triple("Sony SAB", "सोनी सब", listOf(Color(0xFF43A047), Color(0xFF00897B))),
+                Triple("Star Bharat", "स्टार भारत", listOf(Color(0xFFE53935), Color(0xFFAD1457))),
+            )
+            Grid(channels, 3) { (name, hindi, colors) ->
+                BrandTile(hindi, Modifier.weight(1f).height(84.dp), colors) { vm.command(Command.Channel(name)) }
+            }
+
+            SectionTitle(w, Icons.Default.Apps, "ऐप्स")
+            val apps = listOf(
+                Triple(App.JIOHOTSTAR, "हॉटस्टार", listOf(Color(0xFF1A237E), Color(0xFF7B1FA2))),
+                Triple(App.YOUTUBE, "यूट्यूब", listOf(Color(0xFFFF1744), Color(0xFFB71C1C))),
+                Triple(App.ZEE5, "ज़ी5", listOf(Color(0xFF6A1B9A), Color(0xFF311B92))),
+                Triple(App.SONYLIV, "सोनी लिव", listOf(Color(0xFF37474F), Color(0xFF102027))),
+                Triple(App.NETFLIX, "नेटफ्लिक्स", listOf(Color(0xFFE50914), Color(0xFF3A0006))),
+                Triple(App.PRIME_VIDEO, "प्राइम", listOf(Color(0xFF00A8E1), Color(0xFF01579B))),
+            )
+            Grid(apps, 3) { (app, hindi, colors) ->
+                BrandTile(hindi, Modifier.weight(1f).height(76.dp), colors) { vm.openApp(app) }
+            }
+
             Spacer(Modifier.height(26.dp))
-            Text("Made by Abhinav Jain", color = w.gold, fontSize = 15.sp, fontWeight = FontWeight.Bold, style = shadowText)
-            Text("अभिनव जैन द्वारा बनाया गया", color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp)
+            Text("Made by Abhinav Jain", color = w.gold, fontSize = 17.sp, fontWeight = FontWeight.Bold, style = shadowText)
+            Text("अभिनव जैन द्वारा बनाया गया", color = Color.White.copy(alpha = 0.85f), fontSize = 15.sp)
             Spacer(Modifier.height(110.dp)) // room for the floating mic
         }
 
@@ -225,6 +226,11 @@ fun FamilyScreen(vm: MainViewModel, onMic: () -> Unit, onSetup: () -> Unit, scro
     if (askPin) PinDialog(vm.settings.pin, onDismiss = { askPin = false }, onOk = { askPin = false; onSetup() })
 }
 
+/** Saffron-to-magenta tinted card with a gold edge: the reply is the first thing she reads. */
+private fun Modifier.warmCard(w: Wallpaper) = this.clip(RoundedCornerShape(26.dp))
+    .background(Brush.linearGradient(listOf(w.accent.copy(alpha = 0.38f), Color(0xFFD81B60).copy(alpha = 0.28f), Color.White.copy(alpha = 0.08f))))
+    .border(2.dp, Brush.linearGradient(listOf(w.gold, w.accent.copy(alpha = 0.5f), w.gold)), RoundedCornerShape(26.dp))
+
 @Composable
 private fun HeroMic(w: Wallpaper, listening: Boolean, onClick: () -> Unit) {
     val t = rememberInfiniteTransition(label = "mic")
@@ -232,16 +238,16 @@ private fun HeroMic(w: Wallpaper, listening: Boolean, onClick: () -> Unit) {
     val glow by t.animateFloat(0.25f, 0.5f, infiniteRepeatable(tween(1600), RepeatMode.Reverse), label = "glow")
     val haptic = LocalHapticFeedback.current
     val main = if (listening) listOf(Color(0xFFFF5252), Color(0xFFB71C1C)) else listOf(w.accent, w.accentDeep)
-    Box(Modifier.padding(vertical = 18.dp).size(210.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.padding(vertical = 8.dp).size(184.dp), contentAlignment = Alignment.Center) {
         // Outer gold ring always breathes gently; it pulses harder while listening.
-        Box(Modifier.size(200.dp).scale(if (listening) pulse else 1f).clip(CircleShape)
+        Box(Modifier.size(180.dp).scale(if (listening) pulse else 1f).clip(CircleShape)
             .background(Brush.radialGradient(listOf(main.first().copy(alpha = glow), Color.Transparent))))
-        Box(Modifier.size(172.dp).border(3.dp, Brush.sweepGradient(listOf(w.gold, w.accent, w.gold)), CircleShape))
-        Column(Modifier.size(156.dp).shadow(20.dp, CircleShape).clip(CircleShape).background(Brush.linearGradient(main))
+        Box(Modifier.size(158.dp).border(3.dp, Brush.sweepGradient(listOf(w.gold, w.accent, w.gold)), CircleShape))
+        Column(Modifier.size(142.dp).shadow(20.dp, CircleShape).clip(CircleShape).background(Brush.linearGradient(main))
             .clickable { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onClick() },
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Icon(if (listening) Icons.Default.Stop else Icons.Default.Mic, null, Modifier.size(70.dp), tint = Color.White)
-            Text(if (listening) "रुकिए" else "बोलिए", fontSize = 26.sp, color = Color.White, fontWeight = FontWeight.ExtraBold, style = shadowText)
+            Icon(if (listening) Icons.Default.Stop else Icons.Default.Mic, null, Modifier.size(62.dp), tint = Color.White)
+            Text(if (listening) "रुकिए" else "बोलिए", fontSize = 28.sp, color = Color.White, fontWeight = FontWeight.ExtraBold, style = shadowText)
         }
     }
 }
@@ -250,7 +256,7 @@ private fun HeroMic(w: Wallpaper, listening: Boolean, onClick: () -> Unit) {
 private fun SectionTitle(w: Wallpaper, icon: ImageVector, text: String) =
     Row(Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, Modifier.size(22.dp), tint = w.gold)
-        Text(text, color = w.gold, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp), style = shadowText)
+        Text(text, color = w.gold, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp), style = shadowText)
         Box(Modifier.padding(start = 12.dp).weight(1f).height(1.dp).background(Brush.horizontalGradient(listOf(w.gold.copy(alpha = 0.6f), Color.Transparent))))
     }
 
@@ -274,7 +280,7 @@ private fun BrandTile(label: String, modifier: Modifier, colors: List<Color>, on
         .border(1.dp, Color.White.copy(alpha = 0.25f), shape)
         .clickable { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onClick() }.padding(horizontal = 6.dp),
         contentAlignment = Alignment.Center) {
-        Text(label, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center,
+        Text(label, color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.Center,
             maxLines = 2, lineHeight = 22.sp, style = shadowText)
     }
 }
@@ -286,7 +292,7 @@ private fun GlassTile(label: String, icon: ImageVector, modifier: Modifier, onCl
         .clickable { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onClick() },
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, Modifier.size(24.dp), tint = Color.White)
-        Text(label, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
+        Text(label, color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
     }
 }
 
@@ -298,7 +304,7 @@ private fun RoundKey(icon: ImageVector, label: String, brush: Brush? = null, siz
         val bg = if (brush != null) base.shadow(8.dp, CircleShape).clip(CircleShape).background(brush) else base.glass(CircleShape, 0.16f)
         Box(bg.clickable { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onClick() },
             contentAlignment = Alignment.Center) { Icon(icon, label, Modifier.size(size * 0.5f), tint = Color.White) }
-        Text(label, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+        Text(label, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp), style = shadowText)
     }
 }
 
@@ -307,7 +313,7 @@ private fun RoundKey(icon: ImageVector, label: String, brush: Brush? = null, siz
 private fun DPad(w: Wallpaper, onKey: (Key) -> Unit) {
     val haptic = LocalHapticFeedback.current
     fun tap(k: Key) { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onKey(k) }
-    Box(Modifier.width(270.dp).aspectRatio(1f).glass(CircleShape, 0.12f).border(2.dp, w.gold.copy(alpha = 0.45f), CircleShape)) {
+    Box(Modifier.width(280.dp).aspectRatio(1f).glass(CircleShape, 0.12f).border(2.dp, w.gold.copy(alpha = 0.45f), CircleShape)) {
         @Composable fun Arrow(icon: ImageVector, k: Key, align: Alignment) =
             Box(Modifier.align(align).size(84.dp).clip(CircleShape).clickable { tap(k) }, contentAlignment = Alignment.Center) {
                 Icon(icon, k.name, Modifier.size(54.dp), tint = Color.White)
@@ -316,10 +322,10 @@ private fun DPad(w: Wallpaper, onKey: (Key) -> Unit) {
         Arrow(Icons.Default.KeyboardArrowDown, Key.DPAD_DOWN, Alignment.BottomCenter)
         Arrow(Icons.Default.KeyboardArrowLeft, Key.DPAD_LEFT, Alignment.CenterStart)
         Arrow(Icons.Default.KeyboardArrowRight, Key.DPAD_RIGHT, Alignment.CenterEnd)
-        Box(Modifier.align(Alignment.Center).size(106.dp).shadow(12.dp, CircleShape).clip(CircleShape)
+        Box(Modifier.align(Alignment.Center).size(112.dp).shadow(12.dp, CircleShape).clip(CircleShape)
             .background(Brush.linearGradient(listOf(w.accent, w.accentDeep))).border(2.dp, w.gold, CircleShape)
             .clickable { tap(Key.DPAD_CENTER) }, contentAlignment = Alignment.Center) {
-            Text("OK", color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, style = shadowText)
+            Text("OK", color = Color.White, fontSize = 38.sp, fontWeight = FontWeight.ExtraBold, style = shadowText)
         }
     }
 }
@@ -331,7 +337,7 @@ private fun Rocker(label: String, onUp: () -> Unit, onDown: () -> Unit) {
     Column(Modifier.width(78.dp).glass(RoundedCornerShape(39.dp), 0.16f), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.fillMaxWidth().height(74.dp).clickable { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onUp() },
             contentAlignment = Alignment.Center) { Icon(Icons.Default.Add, "$label +", Modifier.size(42.dp), tint = Color.White) }
-        Text(label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
         Box(Modifier.fillMaxWidth().height(74.dp).clickable { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onDown() },
             contentAlignment = Alignment.Center) { Icon(Icons.Default.Remove, "$label −", Modifier.size(42.dp), tint = Color.White) }
     }
