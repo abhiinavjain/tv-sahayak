@@ -5,6 +5,10 @@ import com.tvsahayak.app.Settings
 import com.tvsahayak.app.control.AtvRemote
 import com.tvsahayak.app.control.BoxAdb
 import com.tvsahayak.app.control.LgTv
+import com.tvsahayak.app.control.SamsungTv
+import com.tvsahayak.core.Key
+import com.tvsahayak.core.samsung.SamsungApps
+import com.tvsahayak.core.samsung.SamsungKeys
 import com.tvsahayak.core.VolumeDir
 import com.tvsahayak.core.plan.Action
 import com.tvsahayak.core.plan.Capabilities
@@ -22,13 +26,18 @@ class Executor(
     private val remote: AtvRemote,
     private val adb: BoxAdb,
     private val tv: LgTv,
+    private val samsung: SamsungTv,
     private val episodes: EpisodeFinder,
 ) {
     data class Outcome(val say: String?, val error: String?, val log: List<String>)
 
     @Volatile var adbReady = false
 
-    fun capabilities() = Capabilities(
+    fun capabilities() = if (settings.isSamsung) Capabilities(
+        // A Samsung TV is both the "box" and the TV: keys, apps and volume all go to it.
+        tv = settings.samsungHost.isNotBlank(),
+        liveTvKey = settings.liveTvKey,
+    ) else Capabilities(
         adb = settings.adbEnabled && adbReady,
         tv = settings.tvHost.isNotBlank() && settings.tvClientKey.isNotBlank(),
         volumeViaTv = settings.volumeViaTv,
@@ -36,6 +45,10 @@ class Executor(
     )
 
     suspend fun ensureConnections() {
+        if (settings.isSamsung) {
+            if (settings.samsungHost.isNotBlank()) samsung.connect(settings.samsungHost, settings.samsungToken)
+            return
+        }
         if (settings.boxHost.isNotBlank()) remote.connect(settings.boxHost)
         if (settings.adbEnabled && !adbReady && settings.boxHost.isNotBlank()) {
             adbReady = adb.connect(settings.boxHost, settings.adbPort).isSuccess
@@ -51,6 +64,7 @@ class Executor(
             return Outcome(say, null, log)
         }
         ensureConnections()
+        if (settings.isSamsung) return runSamsung(actions, progress, log)
         for (a in actions) {
             log += a.toString()
             try {
@@ -114,6 +128,68 @@ class Executor(
                 return Outcome(null, "बॉक्स से जुड़ नहीं पाए। बॉक्स चालू है? वाई-फ़ाई एक ही है?", log)
             } catch (e: Exception) {
                 Log.w(TAG, "action $a failed", e)
+                return Outcome(null, "कुछ गड़बड़ हो गई: ${e.message ?: e.javaClass.simpleName}", log)
+            }
+        }
+        return Outcome(note ?: say, null, log)
+    }
+
+    /** The same plan, carried out on a Samsung TV (no box). */
+    private suspend fun runSamsung(actions: List<Action>, progress: (String) -> Unit, log: MutableList<String>): Outcome {
+        val host = settings.samsungHost
+        if (host.isBlank()) return Outcome(null, "सेटअप में सैमसंग टीवी जोड़िए", log)
+        if (samsung.state.value != AtvRemote.State.CONNECTED && !samsung.connect(host, settings.samsungToken))
+            return Outcome(null, "सैमसंग टीवी से जुड़ नहीं पाए। टीवी चालू है? वाई-फ़ाई एक ही है?", log)
+        var say: String? = null
+        var note: String? = null
+        fun appId(app: App) = settings.samsungApps[app] ?: SamsungApps.knownIds[app]
+        for (a in actions) {
+            log += a.toString()
+            try {
+                when (a) {
+                    is Action.Say -> say = a.hindi
+                    is Action.Wait -> delay(a.ms)
+                    is Action.Press -> repeat(a.times) {
+                        val ok = if (a.key == Key.PLAY_PAUSE) samsung.playPause() else SamsungKeys.of(a.key)?.let(samsung::key) ?: true
+                        if (!ok) return Outcome(null, "सैमसंग टीवी से जुड़ नहीं पाए", log)
+                        delay(200)
+                    }
+                    is Action.TvVolume -> repeat(if (a.dir == VolumeDir.MUTE) 1 else a.steps) {
+                        samsung.key(when (a.dir) { VolumeDir.UP -> "KEY_VOLUP"; VolumeDir.DOWN -> "KEY_VOLDOWN"; VolumeDir.MUTE -> "KEY_MUTE" })
+                        delay(200)
+                    }
+                    Action.TvOff -> samsung.key("KEY_POWER")
+                    Action.TvWake -> {
+                        if (settings.samsungMac.isBlank()) return Outcome(null, "टीवी का MAC पता सेटअप में डालिए", log)
+                        samsung.wake(settings.samsungMac)
+                    }
+                    is Action.LaunchApp -> {
+                        val id = appId(a.app) ?: return Outcome(null, "${a.app.hindiName} टीवी पर नहीं मिला", log)
+                        samsung.launch(host, id, null); log += "  launched $id"
+                    }
+                    is Action.LaunchLink -> {
+                        val id = appId(a.app) ?: return Outcome(null, "${a.app.hindiName} टीवी पर नहीं मिला", log)
+                        val tag = SamsungApps.metaTag(a.app, a.uri)
+                        samsung.launch(host, id, tag); log += "  launched $id with $tag"
+                    }
+                    is Action.OpenEpisode -> {
+                        progress("एपिसोड ढूंढ रहे हैं…")
+                        val show = a.showUrl ?: HotstarEpisodes.showFromSearch(episodes.links(Planner.searchLink(App.JIOHOTSTAR, a.query)!!) {
+                            HotstarEpisodes.showFromSearch(it) != null
+                        })
+                        val episode = show?.let { s -> HotstarEpisodes.pick(episodes.links(s) { l -> HotstarEpisodes.pick(l, a.date) != null }, a.date) }
+                        log += "  show: ${show ?: "not found"}"
+                        log += "  episode: ${episode ?: "not found"}"
+                        val id = appId(App.JIOHOTSTAR) ?: return Outcome(null, "जियो हॉटस्टार टीवी पर नहीं मिला", log)
+                        samsung.launch(host, id, episode ?: show)
+                        // Whether the TV app opens the exact episode depends on the app; say so plainly if it may not.
+                        if (episode == null && a.date != null) note = "${HotstarEpisodes.hindiDate(a.date!!)} का एपिसोड नहीं मिला। हॉटस्टार खोल दिया।"
+                    }
+                    is Action.Type -> samsung.text(a.text)
+                    is Action.Select -> Unit // reading the screen needs ADB on an Android TV box
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "samsung action $a failed", e)
                 return Outcome(null, "कुछ गड़बड़ हो गई: ${e.message ?: e.javaClass.simpleName}", log)
             }
         }

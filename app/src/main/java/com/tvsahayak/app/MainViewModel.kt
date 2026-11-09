@@ -17,11 +17,15 @@ import com.tvsahayak.core.content.DefaultChannels
 import com.tvsahayak.core.content.DefaultCatalog
 import com.tvsahayak.core.nlu.RuleParser
 import com.tvsahayak.core.plan.Planner
+import com.tvsahayak.core.samsung.SamsungApps
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -29,7 +33,23 @@ import kotlinx.coroutines.withTimeoutOrNull
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as TvSahayakApp
     val settings get() = app.settings
-    val boxState: StateFlow<AtvRemote.State> = app.remote.state
+    /** "box_lg" or "samsung"; the status dot and every command follow it. */
+    val tvMode = MutableStateFlow(app.settings.tvMode)
+    val boxState: StateFlow<AtvRemote.State> = combine(tvMode, app.remote.state, app.samsung.state) { mode, box, samsung ->
+        if (mode == "samsung") samsung else box
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, AtvRemote.State.DISCONNECTED)
+
+    fun setTvMode(mode: String) {
+        settings.tvMode = mode
+        tvMode.value = mode
+        if (mode == "samsung") {
+            app.remote.disconnect()
+            viewModelScope.launch { app.executor.ensureConnections() }
+        } else {
+            app.samsung.close()
+            if (settings.boxHost.isNotBlank()) app.remote.connect(settings.boxHost)
+        }
+    }
 
     enum class Phase { IDLE, LISTENING, WORKING, DONE, ERROR }
 
@@ -211,6 +231,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         app.executor.adbReady = false
         app.adb.close()
         log("ADB turned off in the app. To remove access fully, turn off Developer options on the box.")
+    }
+
+    private val _samsungMsg = MutableStateFlow("")
+    val samsungMsg = _samsungMsg.asStateFlow()
+    private fun samsungSays(m: String) { _samsungMsg.value = m; log("samsung: $m") }
+
+    fun checkSamsung(host: String) = viewModelScope.launch {
+        samsungSays("Checking $host …")
+        val info = app.samsung.info(host)
+        samsungSays(if (info != null) "$host: ${info.optString("name")} (${info.optString("modelName")}) ✔ This is the Samsung TV."
+        else app.discovery.probe(host))
+    }
+
+    /** Pairs with the Samsung TV (Allow on the TV), saves its MAC for switching on, and finds the streaming apps. */
+    fun pairSamsung(host: String) = viewModelScope.launch {
+        settings.samsungHost = host
+        samsungSays("Press Allow on the TV (within 30 s)…")
+        val err = app.samsung.pair(host)
+        if (err != null) { samsungSays(err); return@launch }
+        app.samsung.info(host)?.optString("wifiMac")?.takeIf { it.count { c -> c == ':' } == 5 }?.let { settings.samsungMac = it }
+        val installed = app.samsung.installedApps()
+        val apps = SamsungApps.match(installed)
+        settings.samsungApps = apps
+        log("samsung apps on TV: ${installed.joinToString { it.second }}")
+        val missing = App.entries.filter { it != App.AIRTEL_XSTREAM && it !in apps && it !in SamsungApps.knownIds }
+        samsungSays("Samsung TV paired ✔ Apps found: ${apps.keys.joinToString { it.displayName }.ifBlank { "none (the TV didn't share its list)" }}" +
+            (if (missing.isNotEmpty()) "\nNot on the TV: ${missing.joinToString { it.displayName }}" else "") +
+            (if (settings.samsungMac.isNotBlank()) "\nMAC ${settings.samsungMac} saved for switching on." else ""))
     }
 
     fun pairTv(host: String) = viewModelScope.launch {

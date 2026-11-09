@@ -11,8 +11,8 @@ object LlmIntent {
 
     val SYSTEM_PROMPT = """
         You turn one spoken TV command from an Indian family into JSON. Commands may be Hindi (Devanagari or Latin
-        letters), English or Hinglish, and may contain speech-recognition mistakes. The TV has an Airtel Xstream
-        Android TV box with these apps: ${App.entries.joinToString { it.name }}.
+        letters), English or Hinglish, and may contain speech-recognition mistakes. The TV (an Airtel Xstream
+        Android TV box, or a Samsung smart TV) has these apps: ${App.entries.joinToString { it.name }}.
         Fields:
         - action: one of play, search, open_app, channel, volume_up, volume_down, mute, key, tv_on, tv_off, unknown.
           Use channel for live TV channels (Star Plus, Colors, Zee TV, Sony, Sony SAB, ...), with the channel name as title.

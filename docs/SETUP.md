@@ -10,6 +10,17 @@ What you need: the Android phone, the Airtel Xstream box (Sercomm ASD-6101SR, An
 3. Open **TV Sahayak** and allow the microphone.
 4. Optional: long-press the app icon and drag the **बोलिए** shortcut to the home screen. It opens the app already listening.
 
+## Samsung TV without a box
+For a home with only a Samsung Smart TV (2016 or newer), the phone controls the TV directly. Skip the box, ADB and LG steps below.
+1. On the TV: Settings → General → External Device Manager → Device Connection Manager → Access Notification → **First Time Only**.
+2. To switch the TV on by voice: Settings → General → Network → Expert Settings → **Power On with Mobile** → On.
+3. In the app: gear icon → PIN → at the top choose **📺 Samsung TV (no box)**.
+4. **Scan** (or type the TV's IP from Settings → General → Network → Network Status), then **Pair** and press **Allow** on the TV.
+5. The app reads the TV's installed apps (JioHotstar, YouTube, ZEE5, SonyLIV, Netflix, Prime Video) and saves the TV's MAC address for switching on.
+
+What works the same: voice commands, OK/arrows/Back/Home, volume, channel ± and numbers, opening apps, YouTube searches, finding a serial's newest or dated episode.
+What may differ: whether the JioHotstar TV app opens the exact show or episode depends on the Samsung version of that app; if it only opens JioHotstar, pick the show with OK.
+
 ## 2. Pair the Airtel box (needed)
 This uses the same protocol as Google's "Google TV" remote app. Nothing on the box is changed.
 1. In the app: gear icon → PIN `1234` → **Scan**. The box appears as 📦. Tap **Use**.

@@ -7,6 +7,7 @@ import com.tvsahayak.app.control.CertStore
 import com.tvsahayak.app.control.Discovery
 import com.tvsahayak.app.control.EpisodeFinder
 import com.tvsahayak.app.control.LgTv
+import com.tvsahayak.app.control.SamsungTv
 import com.tvsahayak.app.exec.Executor
 import com.tvsahayak.app.voice.Speaker
 import kotlinx.coroutines.CoroutineScope
@@ -20,6 +21,7 @@ class TvSahayakApp : Application() {
     lateinit var remote: AtvRemote; private set
     lateinit var adb: BoxAdb; private set
     lateinit var tv: LgTv; private set
+    lateinit var samsung: SamsungTv; private set
     lateinit var executor: Executor; private set
     lateinit var claude: ClaudeFallback; private set
     lateinit var speaker: Speaker; private set
@@ -31,10 +33,11 @@ class TvSahayakApp : Application() {
         remote = AtvRemote(CertStore(this), scope)
         adb = BoxAdb(this)
         tv = LgTv { key -> settings.tvClientKey = key }
-        executor = Executor(settings, remote, adb, tv, EpisodeFinder(this))
+        samsung = SamsungTv { token -> settings.samsungToken = token }
+        executor = Executor(settings, remote, adb, tv, samsung, EpisodeFinder(this))
         claude = ClaudeFallback(settings)
         speaker = Speaker(this)
         discovery = Discovery(this)
-        if (settings.boxHost.isNotBlank()) remote.connect(settings.boxHost)
+        if (!settings.isSamsung && settings.boxHost.isNotBlank()) remote.connect(settings.boxHost)
     }
 }

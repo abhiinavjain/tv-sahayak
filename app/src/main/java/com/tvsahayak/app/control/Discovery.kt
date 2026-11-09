@@ -33,7 +33,7 @@ import java.util.concurrent.LinkedBlockingQueue
 class Discovery(private val context: Context) {
 
     data class Device(val kind: Kind, val name: String, val host: String, val via: String)
-    enum class Kind { BOX, LG_TV }
+    enum class Kind { BOX, LG_TV, SAMSUNG }
 
     fun scan(log: (String) -> Unit): Flow<Device> = callbackFlow {
         val nsd = context.getSystemService(NsdManager::class.java)
@@ -76,6 +76,9 @@ class Discovery(private val context: Context) {
             runCatching { ssdpLg().forEach { trySend(it) } }.onFailure { log("SSDP failed: ${it.message}") }
         }
         launch(Dispatchers.IO) {
+            runCatching { ssdpSamsung().forEach { trySend(it) } }.onFailure { log("Samsung SSDP failed: ${it.message}") }
+        }
+        launch(Dispatchers.IO) {
             runCatching { sweep(log) { trySend(it) } }.onFailure { log("Network sweep failed: ${it.message}") }
         }
 
@@ -114,6 +117,7 @@ class Discovery(private val context: Context) {
                     !lg && open(ip, 8009) -> found(Device(Kind.BOX, "Maybe Airtel box (Cast)", ip, "port 8009"))
                 }
                 if (lg) found(Device(Kind.LG_TV, "Maybe LG TV", ip, "port 3000/3001"))
+                if (!lg && open(ip, 8001)) found(Device(Kind.SAMSUNG, "Maybe Samsung TV", ip, "port 8001"))
             }
         }
     }
@@ -121,12 +125,13 @@ class Discovery(private val context: Context) {
     /** What answers at [host]: used by the Setup screen's Check button. */
     suspend fun probe(host: String): String = coroutineScope {
         val ports = linkedMapOf(6466 to "TV Remote control", 6467 to "TV Remote pairing", 5555 to "ADB", 8009 to "Chromecast",
-            3000 to "LG webOS", 3001 to "LG webOS (TLS)")
+            3000 to "LG webOS", 3001 to "LG webOS (TLS)", 8001 to "Samsung remote API", 8002 to "Samsung remote API (TLS)")
         val open = ports.keys.map { p -> p to async(Dispatchers.IO) { open(host, p) } }
             .filter { it.second.await() }.map { it.first }
         val guess = when {
             6466 in open || 6467 in open -> "This is an Android TV box ✔ (use it as Box IP)"
             3000 in open || 3001 in open -> "This looks like the LG TV, not the box (use it as LG TV IP)"
+            8001 in open || 8002 in open -> "This looks like a Samsung TV (choose \"Samsung TV\" at the top of Setup)"
             8009 in open -> "Cast device, but the TV Remote service isn't answering. Is the box on, not in standby?"
             open.isEmpty() -> "Nothing answered. Wrong address, device off, or not on this Wi-Fi"
             else -> "Unknown device"
@@ -137,6 +142,27 @@ class Discovery(private val context: Context) {
     private fun open(host: String, port: Int): Boolean = runCatching {
         Socket().use { it.connect(InetSocketAddress(host, port), 600) }; true
     }.getOrDefault(false)
+
+    private fun ssdpSamsung(): List<Device> {
+        val st = "urn:samsung.com:device:RemoteControlReceiver:1"
+        val msg = "M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\nST: $st\r\n\r\n".toByteArray()
+        val found = LinkedHashMap<String, Device>()
+        DatagramSocket().use { s ->
+            s.soTimeout = 3000
+            repeat(2) { s.send(DatagramPacket(msg, msg.size, InetAddress.getByName("239.255.255.250"), 1900)) }
+            val buf = ByteArray(2048)
+            try {
+                while (true) {
+                    val p = DatagramPacket(buf, buf.size); s.receive(p)
+                    val text = String(p.data, 0, p.length)
+                    if (!text.contains("samsung", ignoreCase = true)) continue
+                    val host = p.address.hostAddress ?: continue
+                    found[host] = Device(Kind.SAMSUNG, "Samsung TV", host, "SSDP")
+                }
+            } catch (_: SocketTimeoutException) { }
+        }
+        return found.values.toList()
+    }
 
     private fun ssdpLg(): List<Device> {
         val st = "urn:lge-com:service:webos-second-screen:1"

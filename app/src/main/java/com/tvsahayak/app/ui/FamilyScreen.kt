@@ -100,6 +100,7 @@ fun FamilyScreen(vm: MainViewModel, onMic: () -> Unit, onSetup: () -> Unit, scro
     val ui by vm.ui.collectAsState()
     val box by vm.boxState.collectAsState()
     val w by vm.wallpaper.collectAsState()
+    val samsung = vm.tvMode.collectAsState().value == "samsung"
     var askPin by remember { mutableStateOf(false) }
     var showNumbers by remember { mutableStateOf(false) }
     val listening = ui.phase == Phase.LISTENING
@@ -117,9 +118,9 @@ fun FamilyScreen(vm: MainViewModel, onMic: () -> Unit, onSetup: () -> Unit, scro
                 Column(Modifier.weight(1f).padding(start = 10.dp)) {
                     Text("टीवी सहायक", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = w.gold, style = shadowText)
                     val (dot, label) = when (box) {
-                        AtvRemote.State.CONNECTED -> Palette.ok to "टीवी बॉक्स जुड़ा है"
+                        AtvRemote.State.CONNECTED -> Palette.ok to if (samsung) "सैमसंग टीवी जुड़ा है" else "टीवी बॉक्स जुड़ा है"
                         AtvRemote.State.CONNECTING -> Palette.warn to "जोड़ रहे हैं…"
-                        AtvRemote.State.DISCONNECTED -> Palette.bad to "बॉक्स नहीं जुड़ा"
+                        AtvRemote.State.DISCONNECTED -> Palette.bad to if (samsung) "टीवी नहीं जुड़ा" else "बॉक्स नहीं जुड़ा"
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(9.dp).background(dot, CircleShape))

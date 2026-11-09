@@ -20,6 +20,19 @@ import javax.crypto.spec.GCMParameterSpec
 class Settings(context: Context) {
     private val p = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
+    /** Which home this phone controls: "box_lg" (Airtel box + LG TV) or "samsung" (a Samsung TV on its own). */
+    var tvMode by str("tv_mode", "box_lg")
+    val isSamsung get() = tvMode == "samsung"
+    var samsungHost by str("samsung_host")
+    var samsungToken by str("samsung_token")
+    var samsungMac by str("samsung_mac")
+    /** App ID on the Samsung TV for each streaming app, read from the TV's installed-app list. */
+    var samsungApps: Map<App, String>
+        get() = runCatching {
+            val o = JSONObject(p.getString("samsung_apps", "{}")!!)
+            o.keys().asSequence().mapNotNull { k -> App.entries.firstOrNull { it.name == k }?.let { it to o.getString(k) } }.toMap()
+        }.getOrDefault(emptyMap())
+        set(v) = p.edit().putString("samsung_apps", JSONObject(v.mapKeys { it.key.name }).toString()).apply()
     var boxHost by str("box_host")
     var boxName by str("box_name")
     var boxModel by str("box_model")

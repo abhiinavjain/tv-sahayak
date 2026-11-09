@@ -2,7 +2,7 @@
 
 Made by Abhinav Jain.
 
-A voice remote for the family. Say "Anupama ka latest episode chalao", "Netflix par Stranger Things chalao" or "Volume badhao" into an Android phone, and the Airtel Xstream box and LG TV do it. Commands can be Hindi, English or Hinglish.
+A voice remote for the family. Say "Anupama ka latest episode chalao", "Netflix par Stranger Things chalao" or "Volume badhao" into an Android phone, and the TV does it: an Airtel Xstream box with an LG TV, or a Samsung Smart TV on its own. Commands can be Hindi, English or Hinglish.
 
 - **Phone only.** There is no server: the phone talks to the box and TV over home Wi-Fi.
 - **Safe for the box.** It uses the official Android TV Remote protocol (the same one as the Google TV app). Optional ADB is limited to an allowlist of harmless commands. There is no root, flashing or settings change, and the Airtel remote keeps working. See [docs/UNDO.md](docs/UNDO.md).

@@ -60,6 +60,11 @@ fun SetupScreen(vm: MainViewModel, onClose: () -> Unit) {
     val scanning by vm.scanning.collectAsState()
     val boxMsg by vm.boxMsg.collectAsState()
     val tvMsg by vm.tvMsg.collectAsState()
+    val mode by vm.tvMode.collectAsState()
+    val samsungMode = mode == "samsung"
+    val samsungMsg by vm.samsungMsg.collectAsState()
+    var samsungHost by remember { mutableStateOf(s.samsungHost) }
+    var samsungMac by remember { mutableStateOf(s.samsungMac) }
 
     var boxHost by remember { mutableStateOf(s.boxHost) }
     var tvHost by remember { mutableStateOf(s.tvHost) }
@@ -101,6 +106,19 @@ fun SetupScreen(vm: MainViewModel, onClose: () -> Unit) {
             }
         }
 
+        Section("Which TV does this phone control?")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            listOf("box_lg" to "📦 Airtel box + LG TV", "samsung" to "📺 Samsung TV (no box)").forEach { (m, label) ->
+                val selected = mode == m
+                Box(Modifier.weight(1f).height(64.dp).clip(RoundedCornerShape(16.dp))
+                    .background(if (selected) Palette.accent else Palette.tile)
+                    .border(if (selected) 2.dp else 0.dp, Color.White.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                    .clickable { vm.setTvMode(m) }, contentAlignment = Alignment.Center) {
+                    Text(label + if (selected) " ✓" else "", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+                }
+            }
+        }
+
         Section("1. Find devices on Wi-Fi")
         Text("Keep the box and TV switched on, and the phone on the same Wi-Fi.", color = Palette.muted)
         OutlinedButton(onClick = vm::scan, enabled = !scanning) { Text(if (scanning) "Scanning… (15 s)" else "Scan") }
@@ -110,11 +128,31 @@ fun SetupScreen(vm: MainViewModel, onClose: () -> Unit) {
         }
         found.forEach { d ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${if (d.kind == Discovery.Kind.BOX) "📦 Box" else "📺 LG TV"}  ${d.name}  ${d.host}", Modifier.weight(1f))
-                TextButton(onClick = { if (d.kind == Discovery.Kind.BOX) boxHost = d.host else tvHost = d.host }) { Text("Use") }
+                val label = when (d.kind) { Discovery.Kind.BOX -> "📦 Box"; Discovery.Kind.LG_TV -> "📺 LG TV"; Discovery.Kind.SAMSUNG -> "📺 Samsung" }
+                Text("$label  ${d.name}  ${d.host}", Modifier.weight(1f))
+                TextButton(onClick = {
+                    when (d.kind) {
+                        Discovery.Kind.BOX -> boxHost = d.host
+                        Discovery.Kind.LG_TV -> tvHost = d.host
+                        Discovery.Kind.SAMSUNG -> { samsungHost = d.host; if (!samsungMode) vm.setTvMode("samsung") }
+                    }
+                }) { Text("Use") }
             }
         }
 
+        if (samsungMode) {
+            Section("2. Samsung TV — $box")
+            Text("Before pairing, on the TV: Settings → General → External Device Manager → Device Connection Manager → " +
+                "Access Notification: First Time Only. For switching on by voice: Settings → General → Network → " +
+                "Expert Settings → Power On with Mobile: On.", color = Palette.muted)
+            Field("Samsung TV IP address", samsungHost) { samsungHost = it }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { vm.checkSamsung(samsungHost.trim()) }, enabled = samsungHost.isNotBlank()) { Text("Check") }
+                Button(onClick = { vm.pairSamsung(samsungHost.trim()) }, enabled = samsungHost.isNotBlank()) { Text("Pair (press Allow on TV)") }
+            }
+            if (samsungMsg.isNotBlank()) Text(samsungMsg, color = Palette.warn)
+            Field("TV MAC (for switching on; filled after pairing)", samsungMac) { samsungMac = it }
+        } else {
         Section("2. Airtel box (Android TV Remote) — $box")
         Field("Box IP address", boxHost) { boxHost = it }
         Text("Press Pair: a 6-character code appears on the TV. Type it in.", color = Palette.muted)
@@ -148,8 +186,9 @@ fun SetupScreen(vm: MainViewModel, onClose: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(volTv, { volTv = it }); Text("  Send volume to the LG TV (if the box volume keys don't change TV volume)")
         }
+        } // end Airtel box + LG
 
-        Section("TV channels (Airtel box)")
+        Section(if (samsungMode) "TV channels (if the TV has a cable / antenna input)" else "TV channels (Airtel box)")
         Text("Look up each channel's number in the box's Channel Guide and type it here. Then \"Star Plus lagao\" or the " +
             "channel buttons tune it directly. Without a number, the channel opens in its app (JioHotstar / ZEE5 / SonyLIV).",
             color = Palette.muted)
@@ -195,6 +234,7 @@ fun SetupScreen(vm: MainViewModel, onClose: () -> Unit) {
 
         Button(onClick = {
             s.boxHost = boxHost.trim(); s.tvHost = tvHost.trim(); s.tvMac = tvMac.trim()
+            s.samsungHost = samsungHost.trim(); s.samsungMac = samsungMac.trim()
             s.adbPort = adbPort.toIntOrNull() ?: 5555; s.volumeViaTv = volTv
             s.claudeEnabled = claudeOn; s.claudeModel = claudeModel.trim().ifBlank { "claude-opus-5-5" }
             s.claudeDailyLimit = claudeLimit.toIntOrNull() ?: 30

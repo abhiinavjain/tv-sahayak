@@ -13,9 +13,6 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.DatagramPacket
-import java.net.DatagramSocket
-import java.net.InetAddress
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import java.util.concurrent.ConcurrentHashMap
@@ -133,15 +130,7 @@ class LgTv(private val onClientKey: (String) -> Unit) {
      * Wake-on-LAN. Works when the TV's "Turn on via Wi-Fi" (or "Mobile TV On") setting is enabled
      * in Settings > General > Devices / Connection.
      */
-    suspend fun wake(mac: String) = withContext(Dispatchers.IO) {
-        val m = mac.split(':', '-').map { it.toInt(16).toByte() }
-        require(m.size == 6) { "bad MAC $mac" }
-        val payload = ByteArray(6) { 0xFF.toByte() } + (1..16).flatMap { m }.toByteArray()
-        DatagramSocket().use { s ->
-            s.broadcast = true
-            repeat(3) { s.send(DatagramPacket(payload, payload.size, InetAddress.getByName("255.255.255.255"), 9)) }
-        }
-    }
+    suspend fun wake(mac: String) = WakeOnLan.send(mac)
 
     fun close() { ws?.cancel(); ws = null }
 

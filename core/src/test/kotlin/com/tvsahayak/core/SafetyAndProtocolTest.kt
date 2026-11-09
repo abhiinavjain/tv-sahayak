@@ -259,3 +259,32 @@ class LlmIntentTest {
         assertTrue(LlmIntent.SCHEMA_JSON.contains("\"NETFLIX\""))
     }
 }
+
+class SamsungTest {
+    @Test fun keyNames() {
+        assertEquals("KEY_ENTER", com.tvsahayak.core.samsung.SamsungKeys.of(Key.DPAD_CENTER))
+        assertEquals("KEY_RETURN", com.tvsahayak.core.samsung.SamsungKeys.of(Key.BACK))
+        assertEquals("KEY_VOLUP", com.tvsahayak.core.samsung.SamsungKeys.of(Key.VOLUME_UP))
+        assertEquals("KEY_7", com.tvsahayak.core.samsung.SamsungKeys.of(Key.D7))
+        assertEquals("KEY_CHUP", com.tvsahayak.core.samsung.SamsungKeys.of(Key.CHANNEL_UP))
+        // Every key the app can press is either mapped or handled specially.
+        val unmapped = Key.entries.filter { com.tvsahayak.core.samsung.SamsungKeys.of(it) == null }
+        assertEquals(setOf(Key.PLAY_PAUSE, Key.SEARCH), unmapped.toSet())
+    }
+
+    @Test fun matchesInstalledApps() {
+        val installed = listOf("111299001912" to "YouTube", "3201611010983" to "YouTube Kids", "3201512006781" to "Disney+ Hotstar",
+            "3201908019041" to "Sony LIV", "3201711015226" to "ZEE5", "3201907018807" to "Netflix", "3201910019365" to "Prime Video")
+        val m = com.tvsahayak.core.samsung.SamsungApps.match(installed)
+        assertEquals("111299001912", m[App.YOUTUBE])
+        assertEquals("3201512006781", m[App.JIOHOTSTAR])
+        assertEquals("3201908019041", m[App.SONYLIV])
+        assertEquals("3201711015226", m[App.ZEE5])
+        assertNull(m[App.AIRTEL_XSTREAM])
+    }
+
+    @Test fun youtubeGetsQueryOnly() {
+        assertEquals("search_query=bhajan", com.tvsahayak.core.samsung.SamsungApps.metaTag(App.YOUTUBE, "https://www.youtube.com/results?search_query=bhajan"))
+        assertEquals("https://www.hotstar.com/in/shows/x/1", com.tvsahayak.core.samsung.SamsungApps.metaTag(App.JIOHOTSTAR, "https://www.hotstar.com/in/shows/x/1"))
+    }
+}
