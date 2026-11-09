@@ -21,6 +21,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import java.io.File
 
 /**
@@ -101,6 +104,21 @@ class VideoFramesTest {
             vm.show(UiState(Phase.DONE, heard = "बिग बॉस लगाओ", reply = "Bigg Boss खोल दिया। चलाने के लिए OK दबाइए।"))
             snap("21_wall_${w.name.lowercase()}_top")
         }
+    }
+
+    @Test fun keyboardPanel() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            SahayakTheme {
+                androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
+                    com.tvsahayak.app.ui.WallpaperBackground(Wallpaper.ROYAL)
+                    com.tvsahayak.app.ui.KeyboardPanel(Wallpaper.ROYAL, listOf("भजन", "kapil sharma", "cricket highlights", "आरती"),
+                        {}, {}, {}, {}, androidx.compose.ui.Modifier.padding(top = 120.dp, start = 12.dp, end = 12.dp),
+                        initialText = "भजन संध्या", autoFocus = false)
+                }
+            }
+        }
+        snap("40_keyboard")
     }
 
     @Test fun setupScreen() {

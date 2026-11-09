@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
@@ -103,6 +104,8 @@ fun FamilyScreen(vm: MainViewModel, onMic: () -> Unit, onSetup: () -> Unit, scro
     val samsung = vm.tvMode.collectAsState().value == "samsung"
     var askPin by remember { mutableStateOf(false) }
     var showNumbers by remember { mutableStateOf(false) }
+    var showKeyboard by remember { mutableStateOf(false) }
+    val recent by vm.recentSearches.collectAsState()
     val listening = ui.phase == Phase.LISTENING
 
     Box(Modifier.fillMaxSize()) {
@@ -153,6 +156,17 @@ fun FamilyScreen(vm: MainViewModel, onMic: () -> Unit, onSetup: () -> Unit, scro
                     RoundKey(Icons.AutoMirrored.Filled.VolumeOff, "म्यूट") { vm.command(Command.Volume(VolumeDir.MUTE, 1)) }
                     RoundKey(Icons.Default.Home, "होम") { vm.press(Key.HOME) }
                     RoundKey(Icons.AutoMirrored.Filled.ArrowBack, "पीछे") { vm.press(Key.BACK) }
+                }
+                Spacer(Modifier.height(14.dp))
+                // Typing on the phone instead of the TV's on-screen keyboard.
+                Row(Modifier.fillMaxWidth().height(64.dp).shadow(8.dp, RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp))
+                    .background(Brush.linearGradient(listOf(Color(0xFFFF1744), Color(0xFFC2185B))))
+                    .border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
+                    .clickable { showKeyboard = true },
+                    horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Keyboard, null, Modifier.size(32.dp), tint = Color.White)
+                    Text("टाइप करके खोजें", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.padding(start = 10.dp), style = shadowText)
                 }
                 Spacer(Modifier.height(18.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -223,6 +237,12 @@ fun FamilyScreen(vm: MainViewModel, onMic: () -> Unit, onSetup: () -> Unit, scro
             }
         }
     }
+
+    if (showKeyboard) KeyboardDialog(w, recent,
+        onYoutube = { vm.youtubeSearch(it); showKeyboard = false },
+        onTypeOnTv = { vm.typeOnTv(it); showKeyboard = false },
+        onEnter = { vm.press(Key.ENTER) },
+        onDismiss = { showKeyboard = false })
 
     if (askPin) PinDialog(vm.settings.pin, onDismiss = { askPin = false }, onOk = { askPin = false; onSetup() })
 }

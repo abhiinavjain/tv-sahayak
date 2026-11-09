@@ -48,6 +48,10 @@ class Settings(context: Context) {
     var dryRun by bool("dry_run", false)
     var liveTvKey by bool("live_tv_key", true)
     var wallpaper by str("wallpaper", "ROYAL")
+    /** Last few typed searches, newest first, shown as tap-again chips. */
+    var recentSearches: List<String>
+        get() = runCatching { JSONArray(p.getString("recent_searches", "[]")).let { a -> (0 until a.length()).map(a::getString) } }.getOrDefault(emptyList())
+        set(v) = p.edit().putString("recent_searches", JSONArray(v.take(8)).toString()).apply()
     /** Channel numbers on the Airtel box, by channel name (e.g. "Zee TV" -> 109). */
     var channelNumbers: Map<String, Int>
         get() = runCatching {

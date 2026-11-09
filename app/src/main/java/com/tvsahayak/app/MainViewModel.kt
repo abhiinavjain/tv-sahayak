@@ -16,6 +16,7 @@ import com.tvsahayak.core.content.Channel
 import com.tvsahayak.core.content.DefaultChannels
 import com.tvsahayak.core.content.DefaultCatalog
 import com.tvsahayak.core.nlu.RuleParser
+import com.tvsahayak.core.plan.Action
 import com.tvsahayak.core.plan.Planner
 import com.tvsahayak.core.samsung.SamsungApps
 import kotlinx.coroutines.CompletableDeferred
@@ -133,6 +134,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun press(key: Key) = viewModelScope.launch { run(Command.Press(key)) }
+
+    // ---------------- Typing from the phone keyboard ----------------
+
+    private val _recent = MutableStateFlow(settings.recentSearches)
+    val recentSearches = _recent.asStateFlow()
+
+    private fun rememberSearch(text: String) {
+        settings.recentSearches = (listOf(text) + settings.recentSearches.filterNot { it.equals(text, ignoreCase = true) })
+        _recent.value = settings.recentSearches
+    }
+
+    fun youtubeSearch(text: String) = viewModelScope.launch {
+        rememberSearch(text)
+        _ui.update { it.copy(heard = text) }
+        run(Command.Search(text, App.YOUTUBE))
+    }
+
+    /** Fills the search box that is open on the TV (works in any app once its keyboard is showing). */
+    fun typeOnTv(text: String) = viewModelScope.launch {
+        rememberSearch(text)
+        val out = app.executor.run(listOf(Action.Type(text), Action.Say("टीवी पर लिख दिया: $text", "Typed $text")))
+        out.log.forEach { log("  $it") }
+        _ui.update { it.copy(phase = if (out.error != null) Phase.ERROR else Phase.DONE, heard = text, reply = out.error ?: out.say ?: "ठीक है") }
+    }
     fun openApp(a: App) = viewModelScope.launch { run(Command.OpenApp(a)) }
     fun command(c: Command) = viewModelScope.launch { run(c) }
 
